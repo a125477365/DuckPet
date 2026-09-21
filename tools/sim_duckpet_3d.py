@@ -7,7 +7,7 @@
 
 用法：
   bash tools/sim_duckpet_3d.sh            # 打开 3D 窗口 + 终端文字指令
-  python3 tools/sim_duckpet_3d.py --headless --seconds 48   # 无窗口自动验证
+  python3 tools/sim_duckpet_3d.py --headless --seconds 56   # 无窗口自动验证
 
 窗口模式下的终端指令与 python3 -m duckpet.sim 相同（help 查看），例如：
   enroll 爸爸 主人 1.8     spawn 路人甲 -1.5 -1.2 1.72
@@ -118,19 +118,27 @@ def run_headless(brain: Brain, sim: Sim, hw: MuJoCoDuck, world: PeopleWorld,
                  seconds: float) -> None:
     """无窗口自动验证：乱逛位移 / 呼叫转身 / 踢球物理位移 / 跟随走动的主人。"""
     x0, y0, yaw0 = hw.duck_pose()
-    ball0 = hw.ball_detection()
+    ball0 = hw.ball_world_pos()
     timeline = [
         (2.0, "enroll 爸爸 主人 1.80"),
         (2.1, "enroll 姐姐 家人 1.65"),
         (6.0, "spawn 路人甲 -1.5 -1.2 1.72"),
         (8.0, "call 路人甲"),               # 方向按站位自动计算，身份走声纹识别
         (14.0, "say 路人甲 丫丫，踢球！"),
-        (20.0, "say 爸爸 跟着我"),
-        (24.0, "pace 爸爸 0.5 0.06"),       # 主人绕圈慢走（鸭子步速 ~0.12m/s，太快追不上）
+        (34.0, "say 爸爸 跟着我"),          # 踢球留 20 秒：球可能在背后，对准+逼近是精细活
+        (38.0, "pace 爸爸 0.5 0.06"),       # 主人绕圈慢走（鸭子步速 ~0.12m/s，太快追不上）
     ]
     marks: dict[str, tuple] = {}
     yaw_track: list[tuple[float, float]] = []   # (t, yaw) 全程朝向轨迹
-    follow_dists: list[float] = []              # [22s, 结束] 鸭子-爸爸距离
+    follow_dists: list[float] = []              # [28s, 结束] 鸭子-爸爸距离
+    # 踢球必须是踢球策略真的触发（追逐中撞飞球不算"踢"）
+    kick_state = {"fired": False}
+    orig_kick = hw.kick
+    def kick_spy(side: str = "right") -> bool:
+        ok = orig_kick(side)
+        kick_state["fired"] = kick_state["fired"] or ok
+        return ok
+    hw.kick = kick_spy
     print("[headless] 开始自动验证（实时推进）……")
     t = 0.0
     step = 1.0 / CONTROL_HZ
@@ -146,7 +154,7 @@ def run_headless(brain: Brain, sim: Sim, hw: MuJoCoDuck, world: PeopleWorld,
         yaw_track.append((t, hw.duck_yaw_deg()))
         if abs(t - 7.9) < step / 2:
             marks["wander_pose"] = hw.duck_pose()
-        if t >= 22.0:
+        if t >= 36.0:
             d = world.distance_from_duck("爸爸", hw.duck_pose())
             if d is not None:
                 follow_dists.append(d)
@@ -155,16 +163,19 @@ def run_headless(brain: Brain, sim: Sim, hw: MuJoCoDuck, world: PeopleWorld,
         n += 1
 
     x1, y1, yaw1 = hw.duck_pose()
-    ball1 = hw.ball_detection()
+    ball1 = hw.ball_world_pos()
     wx, wy, _ = marks.get("wander_pose", (x0, y0, yaw0))
     wander_dist = ((wx - x0) ** 2 + (wy - y0) ** 2) ** 0.5
     # 呼叫（t=8）后应转向呼叫者：看 [8,14)s 内相对呼叫时刻的最大转角
     yaw_at_call = next(y for tt, y in yaw_track if tt >= 8.0)
     call_turn = max((abs((y - yaw_at_call + 180) % 360 - 180)
                      for tt, y in yaw_track if 8.0 <= tt < 14.0), default=0.0)
+    # 踢球判定：策略真触发（kick_spy）+ 球世界位移 > 0.3m。
+    # 只看位移会被"追球时撞飞"骗过（追逐推球能滚出 10m+）；
+    # 只看触发又可能踢空，两个条件缺一不可。
     kick_ball = None
     if ball0 and ball1:
-        kick_ball = abs(ball1.distance_m - ball0.distance_m)
+        kick_ball = ((ball1[0] - ball0[0]) ** 2 + (ball1[1] - ball0[1]) ** 2) ** 0.5
     follow_start = follow_dists[0] if follow_dists else None
     follow_min = min(follow_dists) if follow_dists else None
     follow_ok = follow_min is not None and follow_min < 0.9
@@ -175,8 +186,11 @@ def run_headless(brain: Brain, sim: Sim, hw: MuJoCoDuck, world: PeopleWorld,
     print(f"2) 呼叫后转身找人：呼叫时刻朝向 {yaw_at_call:.1f}°，6 秒内最大转角 "
           f"{call_turn:.1f}°（期望 > 20）-> {'PASS' if call_turn > 20 else 'FAIL'}")
     if ball0 and ball1:
-        print(f"3) 踢球：球距离 {ball0.distance_m:.3f} m -> {ball1.distance_m:.3f} m"
-              f"（期望变化 > 0.05）-> {'PASS' if kick_ball and kick_ball > 0.05 else 'FAIL'}")
+        kick_ok = kick_state["fired"] and kick_ball is not None and kick_ball > 0.3
+        print(f"3) 踢球：策略触发={'是' if kick_state['fired'] else '否'}，"
+              f"球世界坐标 ({ball0[0]:.2f},{ball0[1]:.2f}) -> "
+              f"({ball1[0]:.2f},{ball1[1]:.2f})，位移 {kick_ball:.2f} m"
+              f"（期望 策略触发 且 位移 > 0.3）-> {'PASS' if kick_ok else 'FAIL'}")
     if follow_start is not None:
         print(f"4) 跟随主人：鸭子-爸爸距离 起始 {follow_start:.2f} m，最小 "
               f"{follow_min:.2f} m，结束 {follow_dists[-1]:.2f} m"
@@ -187,7 +201,7 @@ def run_headless(brain: Brain, sim: Sim, hw: MuJoCoDuck, world: PeopleWorld,
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--headless", action="store_true", help="不开 3D 窗口")
-    ap.add_argument("--seconds", type=float, default=40.0)
+    ap.add_argument("--seconds", type=float, default=56.0)
     args = ap.parse_args()
 
     if args.headless:

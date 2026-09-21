@@ -197,13 +197,27 @@ class FollowBehavior(Behavior):
 
 
 class KickBallBehavior(Behavior):
+    """找球→对准→逼近→踢。
+
+    停止条件必须严格（对准 ±8°、距离 ≤0.16m）：官方踢球策略触发瞬间会把球
+    瞬移到脚前训练位（脚前 9cm），停得太远就会看到"球直接变到脚下"。
+    鸭子走近时可能把球碰跑——没关系，视野会更新球位，继续追，超时再放弃。
+    """
+
     name = "kick_ball"
+
+    _ALIGNED_DEG = 10.0      # 对准容差（站立策略会缓慢偏航漂移，收太紧永远对不准）
+    _KICK_DIST = 0.20        # 起脚距离：再近脚就会碰到球（球被碰跑就得重追）
+    _BACKOFF_DIST = 0.24     # 比这个近就不许转身（划弧会扫到球），先后退
+    _APPROACH_TIMEOUT = 25.0   # 球在背后时对准就要 ~7s，留足余量
 
     def __init__(self, duck: Duck, issuer: Person | None, role: Role):
         super().__init__(duck, issuer, role)
         self._t0 = time.time()
         self._phase = "search"
         self._approach_since: float | None = None
+        self._f_brg: float | None = None    # 方位/距离 EMA：步态让身体每步
+        self._f_dist: float | None = None   # 晃 ±10°，瞬时采样会导致决策抖动
 
     def enter(self) -> None:
         print(f"[{self.duck.config.name}] 收到！去找球……")
@@ -215,30 +229,52 @@ class KickBallBehavior(Behavior):
             if det is None:
                 hw.walk(0.0, 0.0, 0.4)
                 if time.time() - self._t0 > 6:
-                    self.duck.voice.helpless()
-                    print(f"[{self.duck.config.name}] 找不到球，嘎嘎……")
-                    self.done = True
+                    self._give_up("找不到球，嘎嘎……")
                 return
             self._phase = "approach"
-        if self._phase == "approach" and det is not None:
-            if self._approach_since is None:
-                self._approach_since = time.time()
-            # 接近超时兜底：跟踪误差大时也不致卡死
-            overtime = time.time() - self._approach_since > 3
-            if abs(det.bearing_deg) > 10 and not overtime:
-                hw.walk(0.0, 0.0, 0.4 if det.bearing_deg > 0 else -0.4)
-            elif (det.distance_m is not None and det.distance_m > 0.35
-                  and not overtime):
-                hw.walk(0.08)
-            else:
-                hw.stop()
-                side = "right" if det.bearing_deg >= 0 else "left"
-                if hw.kick(side):
-                    print(f"[{self.duck.config.name}] 踢到球啦！")
-                    self.duck.voice.happy()
-                else:
-                    self.duck.voice.helpless()
+        if self._phase != "approach" or det is None:
+            return
+        if self._approach_since is None:
+            self._approach_since = time.time()
+        if time.time() - self._approach_since > self._APPROACH_TIMEOUT:
+            self._give_up("追不上球，它老滚……")
+            return
+        dist_raw = det.distance_m if det.distance_m is not None else 9.9
+        a = 0.3                              # EMA 系数（大脑 10Hz → 时间常数 ~0.3s）
+        self._f_brg = det.bearing_deg if self._f_brg is None \
+            else self._f_brg + a * (det.bearing_deg - self._f_brg)
+        self._f_dist = dist_raw if self._f_dist is None \
+            else self._f_dist + a * (dist_raw - self._f_dist)
+        brg, dist = self._f_brg, self._f_dist
+
+        if dist <= self._KICK_DIST and abs(brg) <= self._ALIGNED_DEG:
+            # 到位立即起脚：站立策略会偏航漂移，停下来等反而会错过窗口
+            hw.stop()
+            side = "right" if brg >= 0 else "left"
+            if hw.kick(side):
+                print(f"[{self.duck.config.name}] 踢到球啦！")
+                self.duck.voice.happy()
                 self.done = True
+            return                          # 球被碰跑了/偏了：下一轮继续调
+        if dist < 0.18 or (dist < self._BACKOFF_DIST and abs(brg) > 20):
+            hw.walk(-0.065)      # 球在脚边又没对准：直线后退腾空间（不许划弧）
+            return
+        if abs(brg) > self._ALIGNED_DEG:
+            # 先转向后走路：斜着走会越走越偏。全速划弧对准
+            #（球在背后时 ~180° 也要转得来；晃动的瞬时方位由 EMA 压住）
+            hw.walk(0.0, 0.0, 0.6 if brg > 0 else -0.6)
+            return
+        if dist > self._KICK_DIST:
+            # 对准后再直线走。官方走路策略指令 <~0.25 m/s 只原地踏步，
+            # 0.065 语义（≈0.26 m/s 指令）是真正能走起来的下限
+            hw.walk(0.065 if dist <= 0.6 else 0.08)
+            return
+
+    def _give_up(self, reason: str) -> None:
+        self.duck.hw.stop()
+        self.duck.voice.helpless()
+        print(f"[{self.duck.config.name}] {reason}")
+        self.done = True
 
 
 class CarryBehavior(Behavior):

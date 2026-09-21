@@ -36,7 +36,7 @@ _VX_SCALE = 4.0
 _WZ_SCALE = 2.0
 _VX_MAX = 0.3
 _VY_MAX = 0.2
-_WZ_MAX = 1.0
+_WZ_MAX = 1.5   # walking 策略训练指令范围 wz ±1.5 rad/s
 
 # 官方 walking 策略实测几乎不会原地转（纯转 wz=1.0 只有 ~2°/s），
 # 带一点前进才转得动（~26°/s）——像真鸭子一样划弧转身：
@@ -192,11 +192,38 @@ class MuJoCoDuck(DuckHardware):
         self.policy.head_offset[1] = clip(math.radians(pitch_deg), -_HEAD_PITCH_MAX, _HEAD_PITCH_MAX)
         self.policy._update_command()
 
+    # 官方踢球策略触发瞬间会把球瞬移到脚前训练位（infer_policy.py 的
+    # _place_ball：yaw 系前 0.09m、侧向 ±0.042m）。鸭子没走到位就踢，
+    # 会看到球"变"到脚下——这里把关：球离训练位太远就拒踢，
+    # 行为层据此继续逼近，而不是开大脚。
+    _KICK_BALL_X = 0.09
+    _KICK_BALL_Y = 0.042
+    _KICK_BALL_TOL = 0.14
+
     def kick(self, side: str = "right") -> bool:
         if self._episodic_busy():
             return False
+        if not self._ball_in_kick_range(side):
+            return False
         self.policy.trigger_behavior(f"kick_{side}")
         return self.policy.behavior_mode == f"kick_{side}"
+
+    def _ball_in_kick_range(self, side: str) -> bool:
+        adr = getattr(self.policy, "ball_qpos_adr", None)
+        if adr is None:
+            return True   # 场景没球，拦也没意义（踢空）
+        x, y, yaw = self.duck_pose()
+        dx = float(self.data.qpos[adr]) - x
+        dy = float(self.data.qpos[adr + 1]) - y
+        c, s = math.cos(math.radians(yaw)), math.sin(math.radians(yaw))
+        fx, fy = c * dx + s * dy, -s * dx + c * dy   # 球在鸭子 yaw 系的坐标
+        iy = -self._KICK_BALL_Y if side == "right" else self._KICK_BALL_Y
+        err = math.hypot(fx - self._KICK_BALL_X, fy - iy)
+        if err > self._KICK_BALL_TOL:
+            print(f"[仿真] 球离脚前训练位 {err*100:.0f}cm"
+                  f"（容差 {self._KICK_BALL_TOL*100:.0f}cm），先走近对准再踢")
+            return False
+        return True
 
     def beak_grab(self) -> bool:
         if self._episodic_busy():
@@ -281,3 +308,10 @@ class MuJoCoDuck(DuckHardware):
         dist = math.hypot(dx, dy)
         bearing = self._wrap(math.degrees(math.atan2(dy, dx)) - yaw)
         return Detection("sports ball", bearing_deg=bearing, distance_m=dist, size="small")
+
+    def ball_world_pos(self) -> tuple[float, float] | None:
+        """球的世界坐标（与鸭子位置无关，验证"球是否真的被踢动"用）。"""
+        adr = self.policy.ball_qpos_adr
+        if adr is None:
+            return None
+        return float(self.data.qpos[adr]), float(self.data.qpos[adr + 1])
