@@ -1,0 +1,33 @@
+# DuckPet 主配置。所有段落都可省略，缺省用默认值。
+# 鸭子名字（即唤醒词，任何人喊这个名字都会触发响应）
+name = "丫丫"
+language = "zh"
+
+# 硬件平台：microduck（Pollen 成品鸭，默认） | openduck（Open Duck Mini，树莓派） | mock（电脑仿真）
+hardware = "microduck"
+
+# 各能力选用哪个插件，名字对应 duckpet/plugins/registry.py 里的注册表
+[adapters]
+wakeword = "sherpa_kws"        # sherpa_kws | openwakeword | none
+asr = "sherpa_streaming"       # sherpa_streaming | faster_whisper | none
+speaker_id = "sherpa_camplusplus"  # sherpa_camplusplus | speechbrain | none
+doa = "pyroomacoustics_srp"    # pyroomacoustics_srp | odas_socket | none
+faces = "insightface"          # insightface | none
+tracker = "yolo_botsort"       # yolo_botsort | none
+objects = "yolo_world"         # yolo_world | yolo_coco | none
+safety = "tof_plus_flow"       # tof_plus_flow | flow_only | none
+
+[tts]
+engine = "piper"               # piper | edge_tts | none
+voice = "zh_CN-huayan-medium"
+
+[llm]
+enabled = false                # true 时用本地小 LLM 兜底解析规则解析不了的指令
+model = "qwen2.5:1.5b"
+
+[behavior]
+command_timeout_s = 8.0        # 被呼叫后等待指令的时长，超时视为"挑逗"
+tease_interval_s = 45.0        # 空闲多久后想去逗主人/家人
+voice_match_threshold = 0.5    # 声纹相似度阈值（CAM++ 官方建议 0.5）
+face_match_threshold = 0.45    # 人脸 embedding 相似度阈值
+wander_radius_m = 5.0          # 空闲乱逛的活动半径（米）：5.0 = 方圆10米

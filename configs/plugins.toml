@@ -1,0 +1,234 @@
+# DuckPet 上游开源组件注册表
+# 这是"持续集成别人开源成果"的核心：每个条目声明一个能力插件的上游来源。
+# 运行 `python3 tools/update_plugins.py` 会逐个检查上游是否有新版本/新提交，
+# 有更新时提示并可一键更新 pinned 字段与 pip 依赖。
+#
+# kind:
+#   pip       —— pip 包，更新 = pip install -U
+#   git       —— 需要 clone 的上游仓库（硬件运行时等）
+#   hf-model  —— Hugging Face / ModelScope 模型，更新 = 重新下载
+#   asset     —— 素材资源（音效等）
+
+# ---------- 机器人本体 / 运动策略 ----------
+[[plugin]]
+capability = "platform.openduck"
+name = "Open Duck Mini Runtime"
+repo = "apirrone/Open_Duck_Mini_Runtime"
+kind = "git"
+ref = "v2"
+pinned = ""
+license = "未声明(集成前请确认)"
+notes = "树莓派鸭子 RL 行走运行时，适配器 duckpet.hardware.openduck"
+
+[[plugin]]
+capability = "platform.openduck"
+name = "Open Duck Mini (硬件/预训练行走策略)"
+repo = "apirrone/Open_Duck_Mini"
+kind = "git"
+ref = "v2"
+pinned = ""
+license = "Apache-2.0"
+notes = "BEST_WALK_ONNX_2.onnx 预训练行走策略"
+
+[[plugin]]
+capability = "policy.kick_carry"
+name = "microduck_rl 踢球/喙叼策略训练管线"
+repo = "pollen-robotics/microduck_rl"
+kind = "git"
+ref = "main"
+pinned = ""
+license = "Apache-2.0"
+notes = "含 BallKick / GroundPick 任务，可训出 ONNX 策略给鸭子用"
+
+[[plugin]]
+capability = "platform.microduck"
+name = "microduck 运行时 (robotctl)"
+repo = "pollen-robotics/microduck"
+kind = "git"
+ref = "main"
+pinned = ""
+license = "Apache-2.0"
+notes = "Pollen 成品鸭固件；适配器 duckpet.hardware.microduck 通过 robotctl CLI 驱动"
+
+# ---------- 语音 ----------
+[[plugin]]
+capability = "audio.pipeline"
+name = "sherpa-onnx (KWS+ASR+声纹 一体)"
+repo = "k2-fsa/sherpa-onnx"
+kind = "pip"
+package = "sherpa-onnx"
+pinned = ""
+license = "Apache-2.0"
+notes = "唤醒词免训练自定义 + 中文流式 ASR + CAM++ 声纹，树莓派可实时"
+
+[[plugin]]
+capability = "audio.wakeword"
+name = "openWakeWord (备选)"
+repo = "dscripka/openWakeWord"
+kind = "pip"
+package = "openwakeword"
+pinned = ""
+license = "Apache-2.0"
+notes = "自定义唤醒词需用其 Colab 训练"
+
+[[plugin]]
+capability = "audio.asr"
+name = "faster-whisper (备选)"
+repo = "SYSTRAN/faster-whisper"
+kind = "pip"
+package = "faster-whisper"
+pinned = ""
+license = "MIT"
+notes = "非流式，适合唤醒后指令识别"
+
+[[plugin]]
+capability = "audio.speaker_id"
+name = "3D-Speaker CAM++ 模型"
+repo = "modelscope/3D-Speaker"
+kind = "hf-model"
+model_id = "iic/speech_campplus_sv_zh-cn_16k-common"
+pinned = ""
+license = "Apache-2.0"
+notes = "经 sherpa-onnx 的 ONNX 导出部署，中文声纹首选"
+
+[[plugin]]
+capability = "audio.speaker_id"
+name = "SpeechBrain ECAPA-TDNN (备选)"
+repo = "speechbrain/speechbrain"
+kind = "pip"
+package = "speechbrain"
+pinned = ""
+license = "Apache-2.0"
+notes = "PyTorch 栈较重"
+
+[[plugin]]
+capability = "audio.doa"
+name = "pyroomacoustics (SRP-PHAT)"
+repo = "LCAV/pyroomacoustics"
+kind = "pip"
+package = "pyroomacoustics"
+pinned = ""
+license = "MIT"
+notes = "4 麦阵列声源定位，纯 Python"
+
+[[plugin]]
+capability = "audio.doa"
+name = "ODAS (备选, 性能更强)"
+repo = "introlab/odas"
+kind = "git"
+ref = "master"
+pinned = ""
+license = "MIT"
+notes = "C 实现，配 ReSpeaker 4-Mic；经 socket JSON 接入"
+
+[[plugin]]
+capability = "audio.tts"
+name = "piper (zh_CN 中文音色)"
+repo = "OHF-Voice/piper1-gpl"
+kind = "pip"
+package = "piper-tts"
+pinned = ""
+license = "GPL-3.0"
+notes = "原 rhasspy/piper 已归档并迁仓换协议；树莓派实时"
+
+[[plugin]]
+capability = "audio.tts"
+name = "edge-tts (联网备选)"
+repo = "rany2/edge-tts"
+kind = "pip"
+package = "edge-tts"
+pinned = ""
+license = "GPL-3.0"
+notes = "依赖在线服务，音质最好但离线不可用"
+
+# ---------- 视觉 ----------
+[[plugin]]
+capability = "vision.faces"
+name = "InsightFace (buffalo_sc)"
+repo = "deepinsight/insightface"
+kind = "pip"
+package = "insightface"
+pinned = ""
+license = "代码MIT/模型权重仅非商业"
+notes = "SCRFD 检测 + MobileFaceNet 识别，CPU 可跑"
+
+[[plugin]]
+capability = "vision.tracker"
+name = "Ultralytics YOLO + boxmot BoTSORT"
+repo = "ultralytics/ultralytics"
+kind = "pip"
+package = "ultralytics"
+pinned = ""
+license = "AGPL-3.0"
+notes = "NCNN 格式在树莓派5 约 15FPS；跟随与球检测都靠它"
+
+[[plugin]]
+capability = "vision.tracker"
+name = "boxmot (BoTSORT + OSNet ReID)"
+repo = "mikel-brostrom/boxmot"
+kind = "pip"
+package = "boxmot"
+pinned = ""
+license = "AGPL-3.0"
+notes = "跟踪丢失后靠 ReID 找回主人"
+
+[[plugin]]
+capability = "vision.objects"
+name = "YOLO-World (开放词汇检测)"
+repo = "AILab-CVC/YOLO-World"
+kind = "pip"
+package = "ultralytics"
+pinned = ""
+license = "GPL-3.0"
+notes = "识别'抹布'等任意物体，低频按需调用"
+
+[[plugin]]
+capability = "vision.depth"
+name = "DepthAnything V2 (可选, 需加速)"
+repo = "DepthAnything/Depth-Anything-V2"
+kind = "git"
+ref = "main"
+pinned = ""
+license = "Apache-2.0"
+notes = "树莓派 CPU 太慢，仅建议有 Hailo-8L 时用 Hailo Model Zoo 的 scdepthv3"
+
+# ---------- 安全 ----------
+[[plugin]]
+capability = "safety.cliff"
+name = "VL53L0X ToF 驱动"
+repo = "adafruit/Adafruit_CircuitPython_VL53L0X"
+kind = "pip"
+package = "adafruit-circuitpython-vl53l0x"
+pinned = ""
+license = "MIT"
+notes = "腹部朝下装 2-3 个防跌落，毫秒级响应"
+
+# ---------- 指令理解 ----------
+[[plugin]]
+capability = "llm.parser"
+name = "Ollama + Qwen2.5-1.5B"
+repo = "ollama/ollama"
+kind = "pip"
+package = "ollama"
+pinned = ""
+license = "MIT(模型 Apache-2.0)"
+notes = "结构化输出解析复杂中文指令，Pi5 约 10 token/s"
+
+# ---------- 音效素材 ----------
+[[plugin]]
+capability = "assets.sounds"
+name = "Freesound (CC0 鸭叫等)"
+repo = "MTG/freesound-python"
+kind = "asset"
+pinned = ""
+license = "CC0/CC-BY 逐条标注"
+notes = "tools/download_models.py 可批量拉取 CC0 音效"
+
+[[plugin]]
+capability = "assets.sounds"
+name = "Kenney 音效包 (CC0)"
+repo = "kenneynl"
+kind = "asset"
+pinned = ""
+license = "CC0"
+notes = "kenney.nl 直接下载 zip"

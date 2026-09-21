@@ -1,0 +1,13 @@
+__pycache__/
+*.egg-info/
+*.pyc
+.DS_Store
+.venv/
+data/
+models/
+*.onnx
+*.wav
+!assets/sounds/*.wav
+# third_party/microduck_rl 是 submodule，其内部的本地环境不入库
+third_party/microduck_rl/.venv-sim/
+third_party/microduck_rl/policies/
