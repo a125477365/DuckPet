@@ -172,6 +172,29 @@ python3 你的弹幕监听.py | bash tools/sim_duckpet_3d.sh
 但跟随等特权指令会被礼貌拒绝；主人/家人在弹幕里发话会自动抢占观众的任务。
 `跳舞`就是为直播准备的：鸭子会扭身子、踩小碎步、摇头晃脑 5 秒。
 
+### 直播伴侣评论区自动监听（macOS）
+
+不用自己写弹幕监听程序也行——`tools/live_danmaku_sim.sh` 一键完成：
+**自动打开直播伴侣 + 自动打开 3D 仿真 + 持续 OCR 评论区、把像指令的弹幕喂给鸭子**。
+
+```bash
+bash tools/live_danmaku_sim.sh        # 启动（只转发像指令的弹幕）
+bash tools/live_danmaku_sim.sh --all  # 弹幕全部转发给鸭子判断
+```
+
+- 原理：`tools/live_companion_danmaku.py` 每 2 秒截取直播伴侣窗口的评论区
+  （右侧「互动消息」面板，已按 1280x720 实测校准），用 macOS 原生 Vision OCR
+  识别新评论，去重后以「昵称：内容」格式**管道**进仿真终端——和上面手打弹幕完全同一条路。
+- **首次运行授权**：macOS 会弹「屏幕录制」权限请求，给终端 App 勾选
+  （系统设置 → 隐私与安全性 → 屏幕录制），否则截不到窗口内容。
+- 过滤规则：默认只转发「喊鸭子名字」或「含指令词（踢球/跳舞/跟我/捡/搬…）」的弹幕，
+  过滤诊断打在终端里（stderr），不会混进鸭子的输入。
+- 窗口布局不同（分辨率/面板拖拽过）时重新校准评论区位置：
+  `python3 tools/live_companion_danmaku.py --dump` 会打印窗口里每行文字的
+  相对坐标，然后 `bash tools/live_danmaku_sim.sh --region x,y,w,h` 即可。
+- 自定义弹幕源（如 B 站/YouTube 弹幕 API 抓取的评论）同样适用：
+  只要你的程序把评论按「用户名：内容」逐行打印，管道进来即可。
+
 ## 真机部署
 
 ### microduck 成品鸭（默认平台）
