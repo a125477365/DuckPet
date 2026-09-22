@@ -1,8 +1,54 @@
 from __future__ import annotations
 
-import tomllib
+try:
+    import tomllib
+except ImportError:  # Python < 3.11：先试 tomli，再用内置迷你解析器兜底（保持零依赖）
+    try:
+        import tomli as tomllib  # type: ignore[no-redef]
+    except ImportError:
+        tomllib = None  # type: ignore[assignment]
 from dataclasses import dataclass, field
 from pathlib import Path
+
+
+def _mini_toml_value(v: str):
+    if v.startswith(('"', "'")):
+        q = v[0]
+        end = v.find(q, 1)
+        return v[1:end] if end > 0 else v.strip(q)
+    if v in ("true", "True"):
+        return True
+    if v in ("false", "False"):
+        return False
+    for cast in (int, float):
+        try:
+            return cast(v)
+        except ValueError:
+            continue
+    return v
+
+
+def _mini_toml(text: str) -> dict:
+    """只够读 configs/duckpet.toml 的迷你 TOML 子集解析器：
+    支持 [section]、key = "字符串" / 数字 / true|false、行尾 # 注释。"""
+    root: dict = {}
+    cur = root
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("[") and line.rstrip().endswith("]"):
+            cur = root
+            for part in line.strip("[]").split("."):
+                cur = cur.setdefault(part.strip(), {})
+            continue
+        if "=" not in line:
+            continue
+        key, val = (s.strip() for s in line.split("=", 1))
+        if not val.startswith(('"', "'")):
+            val = val.split("#", 1)[0].strip()
+        cur[key] = _mini_toml_value(val)
+    return root
 
 
 @dataclass
@@ -33,7 +79,8 @@ class DuckConfig:
         p = Path(path)
         if not p.exists():
             return cfg
-        raw = tomllib.loads(p.read_text(encoding="utf-8"))
+        raw = tomllib.loads(p.read_text(encoding="utf-8")) if tomllib is not None \
+            else _mini_toml(p.read_text(encoding="utf-8"))
         for key in ("name", "language", "hardware"):
             if key in raw:
                 setattr(cfg, key, raw[key])

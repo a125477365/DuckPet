@@ -32,35 +32,30 @@ git clone --recurse-submodules https://github.com/a125477365/DuckPet
 cd DuckPet
 # 已经 clone 了的话：git submodule update --init
 
-# 2. 下载官方动作策略（走路/站立/坐卧/喙叼/左右踢球/前滚翻，共 ~5MB）
-huggingface-cli download pollen-robotics/microduck-policies \
-  --local-dir third_party/microduck_rl/policies
-
-# 2b. 可选：社区加强策略（都是 Apache-2.0，已接入语音指令/配置）
-#     前滚翻 elan 加强版（行走中接续成功率 200/200，官方版 86%）
-huggingface-cli download langli11/microduck-tricks \
-  policies/roulade_elan_v2_ckpt3750.onnx \
-  --local-dir /tmp/mdt && cp /tmp/mdt/policies/roulade_elan_v2_ckpt3750.onnx \
-  third_party/microduck_rl/policies/roulade_elan.onnx
-#     粗糙地形行走（2cm 台阶/9° 斜坡；配置 [sim] walking_policy = "rough_walk_g" 启用）
-huggingface-cli download RemiFabre/microduck-rough-walk-g policy.onnx \
-  --local-dir /tmp/rwg && cp /tmp/rwg/policy.onnx \
-  third_party/microduck_rl/policies/rough_walk_g.onnx
-
-# 3. 仿真运行环境（仅 3D 物理仿真需要；大脑逻辑仿真零依赖）
+# 2. 仿真运行环境（仅 3D 物理仿真需要；大脑逻辑仿真零依赖）
 cd third_party/microduck_rl
 uv venv .venv-sim --python 3.12
 uv pip install --python .venv-sim/bin/python \
   mujoco glfw numpy onnxruntime pyopengl better-actuator-models
+# macOS 直播弹幕桥另需：pyobjc-framework-Vision pyobjc-framework-Quartz pyobjc-framework-Cocoa
 cd ../..
 ```
+
+Windows 用户：上面第 2 步不用手动做——首次运行 `tools\sim_duckpet_3d.bat`
+或 `tools\live_danmaku_sim.bat` 会自动建 venv 并装齐依赖（包括弹幕桥用的
+mss/pywin32/rapidocr_onnxruntime），只需先装好 [uv](https://docs.astral.sh/uv/)。
+
+**全部动作策略模型（官方 7 个 + 社区加强 2 个，共 ~7MB）已随仓库自带在
+`policies/` 目录**（走路/站立/坐卧/喙叼/左右踢球/前滚翻×2/粗糙地形行走，
+来源与 License 见 `policies/README.md`），clone 即完整，无需再下载。
 
 升级官方仿真/策略到最新版：
 
 ```bash
-git submodule update --remote third_party/microduck_rl   # 拉上游最新代码
-huggingface-cli download pollen-robotics/microduck-policies \
-  --local-dir third_party/microduck_rl/policies           # 策略有新版就重下
+git submodule update --remote third_party/microduck_rl   # 拉上游最新仿真/训练代码
+# 策略有新版时重下覆盖 policies/ 即可即插即用：
+huggingface-cli download pollen-robotics/microduck-policies --include "*.onnx" \
+  --local-dir policies/
 ```
 
 ## 9 项功能与开源组件映射
@@ -187,9 +182,10 @@ python3 你的弹幕监听.py | bash tools/sim_duckpet_3d.sh
 但跟随等特权指令会被礼貌拒绝；主人/家人在弹幕里发话会自动抢占观众的任务。
 `跳舞`就是为直播准备的：鸭子会扭身子、踩小碎步、摇头晃脑 5 秒。
 
-### 直播伴侣评论区自动监听（macOS）
+### 直播伴侣评论区自动监听（macOS / Windows）
 
-不用自己写弹幕监听程序也行——`tools/live_danmaku_sim.sh` 一键完成：
+不用自己写弹幕监听程序也行——`tools/live_danmaku_sim.sh`（Windows 用
+`tools/live_danmaku_sim.bat`）一键完成：
 **自动打开直播伴侣 + 自动打开 3D 仿真 + 持续 OCR 评论区、把像指令的弹幕喂给鸭子**。
 
 ```bash
@@ -197,18 +193,24 @@ bash tools/live_danmaku_sim.sh        # 启动（只转发像指令的弹幕）
 bash tools/live_danmaku_sim.sh --all  # 弹幕全部转发给鸭子判断
 ```
 
-- 原理：`tools/live_companion_danmaku.py` 每 2 秒截取直播伴侣窗口的评论区
-  （右侧「互动消息」面板，已按 1280x720 实测校准），用 macOS 原生 Vision OCR
-  识别新评论，去重后以「昵称：内容」格式**管道**进仿真终端——和上面手打弹幕完全同一条路。
-- **首次运行授权**：macOS 会弹「屏幕录制」权限请求，给终端 App 勾选
-  （系统设置 → 隐私与安全性 → 屏幕录制），否则截不到窗口内容。
+- 架构：弹幕桥 `tools/live_companion_danmaku.py` 作为**仿真内线程**运行
+  （`--danmaku`），和终端键盘输入共用一条队列——**弹幕和你手打的指令同时生效**。
+  每 2 秒截取直播伴侣窗口的评论区（右侧「互动消息」面板，已按 1280x720 实测校准），
+  OCR 识别新评论，去重后以「昵称：内容」格式进仿真——和手打弹幕完全同一条路。
+- **macOS**：窗口/截图用 Quartz（窗口被挡住也能截），OCR 用原生 Vision（中文）。
+  首次运行会弹「屏幕录制」权限请求，给终端 App 勾选
+  （系统设置 → 隐私与安全性 → 屏幕录制）。
+- **Windows**：窗口查找用 pywin32，截图用 mss（**直播伴侣窗口请勿最小化/遮挡**），
+  OCR 用 rapidocr_onnxruntime（自带中文模型，纯 pip 安装）。
+  `.bat` 启动器会自动装齐这些依赖。
 - 过滤规则：默认只转发「喊鸭子名字」或「含指令词（踢球/跳舞/跟我/捡/搬…）」的弹幕，
   过滤诊断打在终端里（stderr），不会混进鸭子的输入。
 - 窗口布局不同（分辨率/面板拖拽过）时重新校准评论区位置：
   `python3 tools/live_companion_danmaku.py --dump` 会打印窗口里每行文字的
   相对坐标，然后 `bash tools/live_danmaku_sim.sh --region x,y,w,h` 即可。
 - 自定义弹幕源（如 B 站/YouTube 弹幕 API 抓取的评论）同样适用：
-  只要你的程序把评论按「用户名：内容」逐行打印，管道进来即可。
+  只要你的程序把评论按「用户名：内容」逐行打印，管道进仿真 stdin 即可
+  （`你的弹幕程序 | bash tools/sim_duckpet_3d.sh`，stdin 通道一直保留）。
 
 ## 真机部署
 

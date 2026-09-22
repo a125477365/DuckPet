@@ -33,7 +33,7 @@ face_match_threshold = 0.45    # 人脸 embedding 相似度阈值
 wander_radius_m = 5.0          # 空闲乱逛的活动半径（米）：5.0 = 方圆10米
 
 [sim]
-# 3D 仿真的行走策略（third_party/microduck_rl/policies/ 下的文件名，不带 .onnx）：
+# 3D 仿真的行走策略（项目根 policies/ 下的文件名，不带 .onnx）：
 #   alpha_walking  官方默认，平地上转身灵活（默认）
 #   rough_walk_g   社区 RemiFabre 粗糙地形版（Apache-2.0）：2cm 台阶、9° 斜坡、
 #                  碎石更稳（跟随上下小台阶用它）；代价是转向肉（0.29 rad/s）、

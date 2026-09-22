@@ -7,6 +7,7 @@
 
 用法：
   bash tools/sim_duckpet_3d.sh            # 打开 3D 窗口 + 终端文字指令
+  bash tools/sim_duckpet_3d.sh --danmaku  # 同时嵌入直播伴侣弹幕监听线程
   python3 tools/sim_duckpet_3d.py --headless --seconds 56   # 无窗口自动验证
 
 窗口模式下的终端指令与 python3 -m duckpet.sim 相同（help 查看），例如：
@@ -75,11 +76,45 @@ def stdin_reader(q: queue.Queue) -> None:
         q.put(line.rstrip("\n"))
 
 
-def run_viewer(brain: Brain, sim: Sim, hw: MuJoCoDuck, world: PeopleWorld) -> None:
+def start_danmaku(q: queue.Queue, opts: dict) -> None:
+    """把直播伴侣评论区监听嵌为仿真内线程：评论按「昵称：内容」塞进
+    和终端键盘同一个队列，两路输入同时生效。"""
+    import importlib.util  # noqa: PLC0415
+
+    spec = importlib.util.spec_from_file_location(
+        "live_companion_danmaku",
+        Path(__file__).resolve().parent / "live_companion_danmaku.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    kwargs: dict = dict(on_comment=q.put, app_key=opts["app"],
+                        interval=opts["interval"], forward_all=opts["all"])
+    if opts["region"]:
+        try:
+            kwargs["region"] = mod.parse_region(opts["region"])
+        except ValueError as e:
+            print(f"[弹幕桥] {e}", file=sys.stderr)
+            return
+
+    def _run() -> None:
+        try:
+            mod.run_monitor(**kwargs)
+        except Exception as e:  # 弹幕桥崩了不影响仿真本体
+            print(f"[弹幕桥] 异常退出：{e}", file=sys.stderr)
+
+    threading.Thread(target=_run, daemon=True).start()
+    print("[弹幕桥] 已嵌入仿真：监听直播伴侣评论区中"
+          "（线程模式，终端键盘照样可用）")
+
+
+def run_viewer(brain: Brain, sim: Sim, hw: MuJoCoDuck, world: PeopleWorld,
+               danmaku: dict | None = None) -> None:
     import mujoco  # noqa: PLC0415
 
     q: queue.Queue = queue.Queue()
     threading.Thread(target=stdin_reader, args=(q,), daemon=True).start()
+    if danmaku is not None:
+        start_danmaku(q, danmaku)
     trunk_id = mujoco.mj_name2id(hw.model, mujoco.mjtObj.mjOBJ_BODY, "trunk_base")
     cam_follow = True
     print(f"\n[{brain.duck.config.name}] 3D 仿真启动！鸭子是自主的（空闲会自己乱逛）。")
@@ -202,17 +237,30 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--headless", action="store_true", help="不开 3D 窗口")
     ap.add_argument("--seconds", type=float, default=56.0)
+    ap.add_argument("--danmaku", action="store_true",
+                    help="嵌入直播伴侣评论区监听线程：弹幕和终端键盘同时可用")
+    ap.add_argument("--danmaku-all", action="store_true",
+                    help="弹幕全部转发给鸭子判断（默认只转发像指令的）")
+    ap.add_argument("--danmaku-region", default="",
+                    help="评论区相对位置 x,y,w,h（默认按直播伴侣 1280x720 校准值；none=整个窗口）")
+    ap.add_argument("--danmaku-app", default="", help="窗口名匹配关键词（默认自动匹配直播伴侣）")
+    ap.add_argument("--danmaku-interval", type=float, default=2.0, help="弹幕轮询间隔秒（默认 2）")
     args = ap.parse_args()
 
     if args.headless:
         import shutil
         shutil.rmtree("data/sim3d", ignore_errors=True)   # 自动验证从干净档案开始
+        if args.danmaku:
+            print("[弹幕桥] --headless 模式下忽略 --danmaku", file=sys.stderr)
 
     brain, sim, hw, world = build()
     if args.headless:
         run_headless(brain, sim, hw, world, args.seconds)
     else:
-        run_viewer(brain, sim, hw, world)
+        danmaku = {"all": args.danmaku_all, "region": args.danmaku_region,
+                   "app": args.danmaku_app, "interval": args.danmaku_interval} \
+            if args.danmaku else None
+        run_viewer(brain, sim, hw, world, danmaku)
 
 
 if __name__ == "__main__":

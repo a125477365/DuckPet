@@ -5,7 +5,6 @@ __pycache__/
 .venv/
 data/
 models/
-*.onnx
 *.wav
 !assets/sounds/*.wav
 # third_party/microduck_rl 是 submodule，其内部的本地环境不入库

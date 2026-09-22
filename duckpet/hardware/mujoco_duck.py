@@ -19,9 +19,12 @@ from pathlib import Path
 from ..perception.base import Detection
 from .base import DuckHardware
 
-_REPO = Path(__file__).resolve().parent.parent.parent / "third_party" / "microduck_rl"
+_ROOT = Path(__file__).resolve().parent.parent.parent
+_REPO = _ROOT / "third_party" / "microduck_rl"
 _SCENE = _REPO / "src" / "mjlab_microduck" / "robot" / "microduck" / "scene_ball.xml"
-_POLICIES = _REPO / "policies"
+# 策略文件随 DuckPet 仓库自带（项目根 policies/，来源与 License 见其 README.md），
+# clone 即可跑，不用再单独下载
+_POLICIES = _ROOT / "policies"
 
 _DECIMATION = 4          # 50Hz 控制 × 200Hz 物理
 _TIMESTEP = 0.005
