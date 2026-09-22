@@ -16,6 +16,9 @@ class Intent(Enum):
     STOP = auto()        # 停下当前动作
     SING = auto()        # 唱歌
     DANCE = auto()       # 跳舞（任何人）
+    TRICK = auto()       # 杂技：前滚翻（后滚翻/原地跳/躺下社区还没有策略，会礼貌说不会）
+    SIT = auto()         # 坐下
+    STAND_UP = auto()    # 站起来
     SET_NAME = auto()    # 给鸭子改名（家人及以上）
     ADD_RELATION = auto()  # 登记主人/家人/朋友/客人
     UNKNOWN = auto()

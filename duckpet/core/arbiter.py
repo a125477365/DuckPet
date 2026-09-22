@@ -56,6 +56,8 @@ class Arbiter:
             if ctx.active_name is not None and role >= ctx.active_role:
                 return Decision.EXECUTE
             return Decision.ACK_ONLY
+        if cmd.intent is Intent.STAND_UP:
+            return Decision.EXECUTE   # 坐着时"站起来"不能排队（坐行为不会自己结束）
         if ctx.active_name is None:
             return Decision.EXECUTE
         if role > ctx.active_role:

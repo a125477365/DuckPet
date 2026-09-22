@@ -60,6 +60,24 @@ class MockHardware(DuckHardware):
     def beak_release(self) -> None:
         self._say("松开喙，放下东西")
 
+    def do_trick(self, trick: str) -> bool:
+        if trick == "roulade":
+            self._say("前滚翻！（滚一圈）")
+            return True
+        return False   # 后滚翻/原地跳/躺下：社区还没有策略
+
+    def sit(self) -> bool:
+        self._say("坐下")
+        self._sitting = True
+        return True
+
+    def stand_up(self) -> bool:
+        if not getattr(self, "_sitting", False):
+            return False
+        self._say("站起来")
+        self._sitting = False
+        return True
+
     def read_cliff(self) -> bool:
         return self.cliff
 

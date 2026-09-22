@@ -48,7 +48,8 @@ _TURN_DONE_DEG = 8.0     # 目标转身完成容差
 class MuJoCoDuck(DuckHardware):
     name = "mujoco_microduck"
 
-    def __init__(self, repo: Path = _REPO, policies_dir: Path = _POLICIES):
+    def __init__(self, repo: Path = _REPO, policies_dir: Path = _POLICIES,
+                 walking_policy: str = "alpha_walking"):
         import mujoco  # noqa: PLC0415
         import numpy as np  # noqa: PLC0415
 
@@ -91,15 +92,26 @@ class MuJoCoDuck(DuckHardware):
             })
             self.data.mocap_pos[int(self.model.body_mocapid[bid])] = [0.0, 0.0, -50.0]
 
+        # 行走策略可换：默认官方 alpha_walking；rough_walk_g（社区 RemiFabre，
+        # 小台阶/9° 斜坡更稳）等放进 policies/ 即可在配置里切换
+        walking_path = policies_dir / f"{walking_policy}.onnx"
+        if not walking_path.exists():
+            print(f"[仿真] 找不到行走策略 {walking_path}，回退 alpha_walking")
+            walking_path = policies_dir / "alpha_walking.onnx"
+        # 前滚翻优先用社区加强版 roulade_elan（langli11/microduck-tricks，
+        # 行走中接续成功率 200/200，官方 86%）
+        roulade_path = policies_dir / "roulade_elan.onnx"
+        if not roulade_path.exists():
+            roulade_path = policies_dir / "roulade.onnx"
         self.policy = mod.PolicyInference(
             self.model, self.data,
-            walking_onnx_path=str(policies_dir / "alpha_walking.onnx"),
+            walking_onnx_path=str(walking_path),
             standing_onnx_path=str(policies_dir / "alpha_stand.onnx"),
             sitstand_onnx_path=str(policies_dir / "alpha_sitstand.onnx"),
             ground_pick_onnx_path=str(policies_dir / "alpha_ground_pick.onnx"),
             kick_left_onnx_path=str(policies_dir / "ball_kick_left.onnx"),
             kick_right_onnx_path=str(policies_dir / "ball_kick_right.onnx"),
-            roulade_onnx_path=str(policies_dir / "roulade.onnx"),
+            roulade_onnx_path=str(roulade_path),
             new_cmd_obs=True,
             use_projected_gravity=True,
         )
@@ -153,7 +165,7 @@ class MuJoCoDuck(DuckHardware):
             self._turn_target_yaw = None
             self._vel = (0.0, self._vel[1], 0.0)   # 到位立即刹住，别靠惯性冲
             return
-        wz = float(self._np.clip(math.radians(err) * 2.0, -1.0, 1.0))
+        wz = float(self._np.clip(math.radians(err) * 2.0, -1.5, 1.5))
         # 纯转没用，划弧转：误差大时弧线大一点，快到位时放慢
         creep = _TURN_CREEP_VX * _VX_SCALE * min(1.0, abs(err) / 45.0)
         self._vel = (creep, self._vel[1], wz)
@@ -233,6 +245,34 @@ class MuJoCoDuck(DuckHardware):
 
     def beak_release(self) -> None:
         pass   # 仿真里没有真正的夹爪，叼取由 ground_pick 策略完成
+
+    def do_trick(self, trick: str) -> bool:
+        """杂技：roulade=前滚翻。坐着或忙着（踢球/叼取中）时不做。"""
+        if trick != "roulade":
+            return False
+        if self.policy.sit_mode:
+            print("[仿真] 坐着呢，先站起来才能翻滚")
+            return False
+        if self._episodic_busy():
+            return False
+        self._vel = (0.0, 0.0, 0.0)
+        self._turn_target_yaw = None
+        self.policy.trigger_behavior("roulade")
+        return self.policy.behavior_mode == "roulade"
+
+    def sit(self) -> bool:
+        if self._episodic_busy() or self.policy.sit_mode:
+            return False
+        self._vel = (0.0, 0.0, 0.0)
+        self._turn_target_yaw = None
+        self.policy.toggle_sit()
+        return self.policy.sit_mode
+
+    def stand_up(self) -> bool:
+        if not self.policy.sit_mode:
+            return False
+        self.policy.toggle_sit()
+        return not self.policy.sit_mode
 
     def read_cliff(self) -> bool:
         return False   # 仿真地面平坦无悬崖

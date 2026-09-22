@@ -185,13 +185,13 @@ class FollowBehavior(Behavior):
             bearing = self.duck.vision.person_bearing(self.target)
             dist = self.duck.vision.person_distance(self.target)
         if bearing is None:
-            self.duck.hw.walk(0.0, 0.0, 0.3)   # 目标丢了，转圈找
+            self.duck.hw.walk(0.0, 0.0, 0.6)   # 目标丢了，转圈找
             return
         if dist is not None and dist < 0.55:
             self.duck.hw.walk(0.0)             # 够近了，别踩到脚
             return
         # 平滑追踪：转向与方位误差成正比，边走弧线边逼近（避免来回猛拐）
-        wz = max(-0.4, min(0.4, bearing / 60.0))
+        wz = max(-0.6, min(0.6, bearing / 60.0))
         vx = 0.0 if abs(bearing) > 60 else 0.08
         self.duck.hw.walk(vx, 0.0, wz)
 
@@ -436,10 +436,10 @@ class SingBehavior(Behavior):
 
 
 class DanceBehavior(Behavior):
-    """跳舞：左右交替扭 + 小碎步前后挪 + 头跟着晃。任何人都能点舞。"""
+    """跳舞：快速扭身 + 大步前后蹦 + 头大幅度甩 + 结尾转圈谢幕。任何人都能点舞。"""
 
     name = "dance"
-    DURATION = 5.0
+    DURATION = 6.0
 
     def __init__(self, duck: Duck, issuer: Person | None = None, role: Role = Role.STRANGER):
         super().__init__(duck, issuer, role)
@@ -462,10 +462,67 @@ class DanceBehavior(Behavior):
             self.duck.personality.reward("played")
             self.done = True
             return
-        beat = int(el / 0.7)
-        wz = 0.5 if beat % 2 == 0 else -0.5          # 左右扭
-        vx = 0.04 if int(el / 1.4) % 2 == 0 else -0.03   # 前后小碎步
+        if el >= self.DURATION - 1.2:
+            hw.walk(0.065, 0.0, 0.75)    # 谢幕：边冲边转一整圈
+            hw.turn_head(0, -20)         # 抬头亮相
+            return
+        beat = int(el / 0.5)             # 快节奏
+        wz = 0.75 if beat % 2 == 0 else -0.75          # 满量程快速扭
+        vx = 0.08 if int(el / 1.0) % 2 == 0 else -0.065  # 大步前后蹦（真的能蹦起来）
         hw.walk(vx, 0.0, wz)
-        if beat != self._last_bob:                   # 头跟着节奏晃
+        if beat != self._last_bob:                     # 头跟着节奏大幅甩
             self._last_bob = beat
-            hw.turn_head(25 if beat % 2 == 0 else -25, 8)
+            hw.turn_head(55 if beat % 2 == 0 else -55, 22)
+
+
+class TrickBehavior(Behavior):
+    """杂技：前滚翻（社区策略 elan 加强版）。还没学会的礼貌说不会。"""
+
+    name = "trick"
+    _NAMES = {"roulade": "前滚翻", "backflip": "后滚翻",
+              "jump": "原地跳", "lie_down": "躺下"}
+    _SORRY = {"backflip": "后滚翻我还没学会，社区的叔叔阿姨还在教呢",
+              "jump": "我还跳不起来，等我再练练",
+              "lie_down": "躺下我怕起不来，还是坐着吧"}
+
+    def __init__(self, duck: Duck, issuer: Person | None, role: Role, trick: str):
+        super().__init__(duck, issuer, role)
+        self.trick = trick
+        self._fired = False
+
+    def enter(self) -> None:
+        pass
+
+    def update(self, dt: float) -> None:
+        if self._fired:
+            self.done = True
+            return
+        self._fired = True
+        label = self._NAMES.get(self.trick, self.trick)
+        if self.duck.hw.do_trick(self.trick):
+            print(f"[{self.duck.config.name}] 看我的{label}！")
+            self.duck.voice.happy()
+            self.duck.personality.reward("played")
+        else:
+            sorry = self._SORRY.get(self.trick, f"{label}我还不会呢")
+            print(f"[{self.duck.config.name}] {sorry}")
+            self.duck.voice.helpless()
+        self.done = True
+
+
+class SitBehavior(Behavior):
+    """坐下休息：坐着不动等下一指令（坐着时不乱逛）。"""
+
+    name = "sit"
+
+    def enter(self) -> None:
+        if self.duck.hw.sit():
+            print(f"[{self.duck.config.name}] 好啦，坐下歇会儿~")
+            self.duck.voice.ack()
+        else:
+            print(f"[{self.duck.config.name}] 现在坐不下（忙着呢）")
+            self.duck.voice.helpless()
+            self.done = True
+
+    def update(self, dt: float) -> None:
+        pass   # 就静静坐着；新指令由仲裁器抢占/排队

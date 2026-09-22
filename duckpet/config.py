@@ -21,6 +21,7 @@ class DuckConfig:
     voice_match_threshold: float = 0.5
     face_match_threshold: float = 0.45
     wander_radius_m: float = 5.0   # 空闲乱逛的活动半径（家=启动位置；5m = 方圆10米）
+    walking_policy: str = "alpha_walking"   # 仿真行走策略（policies/ 下的文件名，不含 .onnx）
 
     @property
     def people_path(self) -> Path:
@@ -50,4 +51,6 @@ class DuckConfig:
                         "wander_radius_m"):
                 if key in raw["behavior"]:
                     setattr(cfg, key, raw["behavior"][key])
+        if "sim" in raw:
+            cfg.walking_policy = raw["sim"].get("walking_policy", cfg.walking_policy)
         return cfg

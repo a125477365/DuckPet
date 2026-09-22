@@ -53,10 +53,16 @@
 
 | 能力 | 组件 | 状态 |
 |---|---|---|
-| 行走 | Open Duck Mini 预训练 `BEST_WALK_ONNX_2.onnx`（50Hz RL 策略） | ✅ 现成 |
-| 踢球 | microduck_rl `Mjlab-BallKick-Flat-MicroDuck` 训练管线 | ⚠️ 需按本鸭观测维度重训 |
-| 喙叼东西 | microduck_rl `Mjlab-GroundPick` 训练管线 | ⚠️ 同上 |
-| microduck 成品鸭 | 固件自带 `kick_left/right`、`ground_pick` 策略 slot | ✅ 现成（robotctl 调用） |
+| 行走 | microduck 官方 `alpha_walking`（HF `pollen-robotics/microduck-policies`，Apache-2.0） | ✅ 已接入 |
+| 行走·粗糙地形 | 社区 `RemiFabre/microduck-rough-walk-g`（Apache-2.0）：2cm 台阶、9° 斜坡、碎石更稳；已下载为 `policies/rough_walk_g.onnx`，`configs/duckpet.toml` 的 `[sim] walking_policy` 切换。代价：转向肉（0.29 rad/s）、功耗 +17%；**下 ≥2cm 台阶会摔**（sim-only，未上真机） | ✅ 可选切换 |
+| 站立/坐下/站起 | 官方 `alpha_stand` / `alpha_sitstand`（posture flag 一刀切，坐下/站起双向） | ✅ 已接入 |
+| 踢球 | 官方 `ball_kick_left/right`（球须在脚前 9cm 训练位，由行为层逼近对准） | ✅ 已接入 |
+| 喙叼东西 | 官方 `alpha_ground_pick` | ✅ 已接入 |
+| 前滚翻 | 社区 `langli11/microduck-tricks` 的 `roulade_elan`（Apache-2.0，行走中接续 200/200，官方版 86%），已下载为 `policies/roulade_elan.onnx` | ✅ 已接入 |
+| 后滚翻 | [Lulzx/microduck-backflip](https://github.com/Lulzx/microduck-backflip) 有训练任务代码与评估管线，**未发布 ONNX 权重**；官方宣传视频展示过 | ⏳ 待补（ weights 发布即可接入） |
+| 原地跳 | [joanfox/microduck-happy-hop](https://huggingface.co/joanfox/microduck-happy-hop)（首个在真机上跑通的社区策略）/ [chenp9527/microduck-jump](https://github.com/chenp9527/microduck-jump)（3-6cm 原地点跳），**均未公开可下载权重** | ⏳ 待补 |
+| 躺下/趴下 | 社区暂无 | ⏳ 待补 |
+| 上下台阶（真楼梯） | [microduck-step-up-policy](https://huggingface.co/Nupr-Haokun/microduck-step-up-head-brake)（25mm 单台阶，需人工配合放行，sim-only）；自主上下楼梯社区暂无 | ⏳ 待补 |
 
 Open Duck Mini 行走控制：实例化 `RLWalk(commands=False)`，写
 `rl_walk.last_commands = [vx, vy, wz, neck_pitch, head_pitch, head_yaw, head_roll]`。

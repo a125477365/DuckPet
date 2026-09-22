@@ -43,6 +43,13 @@ _COME = re.compile(r"(过来|来这|来我这)")
 _STOP = re.compile(r"(停下|别动|站住|休息吧|歇会)")
 _SING = re.compile(r"(唱歌|唱首歌|来一首)")
 _DANCE = re.compile(r"(跳舞|跳个舞|跳支舞|来段舞|dance)", re.IGNORECASE)
+# 杂技（注意顺序：_DANCE 先匹配，"跳个舞"不会被 _JUMP 抢走）
+_FWD_ROLL = re.compile(r"(前滚翻|前空翻|翻跟头|翻跟斗|打个滚|滚一个)")
+_BACK_ROLL = re.compile(r"(后滚翻|后空翻)")
+_JUMP = re.compile(r"(原地跳|跳一下|跳一跳|蹦蹦|跳高|跳起来)")
+_LIE_DOWN = re.compile(r"(躺下|趴下|睡觉觉)")
+_SIT = re.compile(r"(坐下|蹲下|坐好)")
+_STAND_UP = re.compile(r"(站起来|起立|起身)")
 _BA_TARGET = re.compile(r"把(?P<target>[\u4e00-\u9fff]{1,6}?)(?:捡|叼|拿|搬|拾|放)")
 _SET_NAME = re.compile(
     r"(?:你以后(?:就)?叫|你(?:就)?叫|你的名字是|给你改名叫)(?P<name>[\u4e00-\u9fffA-Za-z0-9]{1,8})"
@@ -108,6 +115,18 @@ class RuleParser:
             return ParsedCommand(Intent.SING, raw=text)
         if _DANCE.search(t):
             return ParsedCommand(Intent.DANCE, raw=text)
+        if _FWD_ROLL.search(t):
+            return ParsedCommand(Intent.TRICK, raw=text, target="roulade")
+        if _BACK_ROLL.search(t):
+            return ParsedCommand(Intent.TRICK, raw=text, target="backflip")
+        if _JUMP.search(t):
+            return ParsedCommand(Intent.TRICK, raw=text, target="jump")
+        if _LIE_DOWN.search(t):
+            return ParsedCommand(Intent.TRICK, raw=text, target="lie_down")
+        if _SIT.search(t):
+            return ParsedCommand(Intent.SIT, raw=text)
+        if _STAND_UP.search(t):
+            return ParsedCommand(Intent.STAND_UP, raw=text)
         return ParsedCommand(Intent.UNKNOWN, raw=text)
 
 

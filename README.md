@@ -36,6 +36,17 @@ cd DuckPet
 huggingface-cli download pollen-robotics/microduck-policies \
   --local-dir third_party/microduck_rl/policies
 
+# 2b. 可选：社区加强策略（都是 Apache-2.0，已接入语音指令/配置）
+#     前滚翻 elan 加强版（行走中接续成功率 200/200，官方版 86%）
+huggingface-cli download langli11/microduck-tricks \
+  policies/roulade_elan_v2_ckpt3750.onnx \
+  --local-dir /tmp/mdt && cp /tmp/mdt/policies/roulade_elan_v2_ckpt3750.onnx \
+  third_party/microduck_rl/policies/roulade_elan.onnx
+#     粗糙地形行走（2cm 台阶/9° 斜坡；配置 [sim] walking_policy = "rough_walk_g" 启用）
+huggingface-cli download RemiFabre/microduck-rough-walk-g policy.onnx \
+  --local-dir /tmp/rwg && cp /tmp/rwg/policy.onnx \
+  third_party/microduck_rl/policies/rough_walk_g.onnx
+
 # 3. 仿真运行环境（仅 3D 物理仿真需要；大脑逻辑仿真零依赖）
 cd third_party/microduck_rl
 uv venv .venv-sim --python 3.12
@@ -65,7 +76,11 @@ huggingface-cli download pollen-robotics/microduck-policies \
 | 7 | 踢球 | `KickBallBehavior` | 球检测：YOLO(COCO)；踢球动作策略：microduck_rl 官方 `ball_kick_left/right`（仿真实测把球踢飞 7m+） | ✅ |
 | 8 | 叼/搬东西 | `CarryBehavior` | 开放词汇检测：YOLO-World；喙叼策略：microduck_rl 官方 `alpha_ground_pick` | ✅ |
 | 9 | 调皮忠诚治愈性格 | `core/personality.py`（拓麻歌子式情绪引擎） | 自建（参考 Reachy Mini / 小智表情设计） | ✅ |
-| 10 | 跳舞（直播彩蛋，任何人可点） | `core/behaviors.py: DanceBehavior` | 自建摇摆舞动作编排；后续可换 microduck 官方 `roulade` 等花哨策略 | ✅ |
+| 10 | 跳舞（直播彩蛋，任何人可点） | `core/behaviors.py: DanceBehavior` | 自建摇摆舞动作编排（满量程扭身+前后蹦+甩头+转圈谢幕） | ✅ |
+| 11 | 前滚翻 | `core/behaviors.py: TrickBehavior` | 社区 `langli11/microduck-tricks` 的 roulade_elan（Apache-2.0，比官方版成功率高） | ✅ |
+| 12 | 坐下/站起 | `SitBehavior` + 官方 `alpha_sitstand` | 官方策略（posture flag 双向切换） | ✅ |
+| 13 | 后滚翻/原地跳/躺下 | 语音指令已留（会礼貌说"还没学会"） | 社区有训练代码未发布权重（Lulzx/microduck-backflip、microduck-jump），发布即接入 | ⏳ |
+| 14 | 上下台阶（跟随时） | 行走策略热切换 | 社区 `RemiFabre/microduck-rough-walk-g`（Apache-2.0）：2cm 台阶/9° 斜坡/碎石；`[sim] walking_policy` 一键切换；下 ≥2cm 台阶会摔，真楼梯待社区 | ✅ 可选 |
 
 完整组件清单、License、备选方案见 [PLUGINS.md](PLUGINS.md)。
 

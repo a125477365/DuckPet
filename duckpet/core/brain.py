@@ -22,7 +22,9 @@ from ..core.behaviors import (
     KickBallBehavior,
     SeekCallerBehavior,
     SingBehavior,
+    SitBehavior,
     TeaseBehavior,
+    TrickBehavior,
     WanderBehavior,
 )
 from ..core.commands import CascadedParser
@@ -189,6 +191,15 @@ class Brain:
         if cmd.intent is Intent.ADD_RELATION:
             self._add_relation(cmd, person)
             return
+        if cmd.intent is Intent.STAND_UP:
+            if isinstance(self.behavior, SitBehavior) and duck.hw.stand_up():
+                print(f"[{name}] 站起来啦！")
+                duck.voice.happy()
+                self.behavior.exit()
+                self.behavior = WanderBehavior(duck)
+            else:
+                duck.voice.quack()   # 本来就站着
+            return
 
         behavior: Behavior
         if cmd.intent is Intent.FOLLOW and person is not None:
@@ -203,6 +214,10 @@ class Brain:
             behavior = SingBehavior(duck, person, role)
         elif cmd.intent is Intent.DANCE:
             behavior = DanceBehavior(duck, person, role)
+        elif cmd.intent is Intent.TRICK and cmd.target:
+            behavior = TrickBehavior(duck, person, role, cmd.target)
+        elif cmd.intent is Intent.SIT:
+            behavior = SitBehavior(duck, person, role)
         else:
             duck.voice.quack()
             return

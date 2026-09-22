@@ -37,4 +37,17 @@ class DuckHardware(ABC):
     def read_cliff(self) -> bool:
         """腹部朝下的 ToF/红外传感器检测到悬崖（脚下悬空）。"""
 
+    def do_trick(self, trick: str) -> bool:
+        """杂技动作（roulade 前滚翻等）。默认不支持，返回 False。"""
+        print(f"[硬件] 该平台不支持杂技 {trick}")
+        return False
+
+    def sit(self) -> bool:
+        """坐下。默认不支持，返回 False。"""
+        return False
+
+    def stand_up(self) -> bool:
+        """从坐姿站起来。默认不支持，返回 False。"""
+        return False
+
     def close(self) -> None: ...

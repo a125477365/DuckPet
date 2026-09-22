@@ -57,7 +57,7 @@ def build() -> tuple[Brain, Sim, MuJoCoDuck, PeopleWorld]:
     config.data_dir = Path("data/sim3d")
     config.command_timeout_s = 3.0
     registry = PersonRegistry(config.people_path)
-    hw = MuJoCoDuck()
+    hw = MuJoCoDuck(walking_policy=config.walking_policy)
     world = PeopleWorld(hw)
     vision = MuJoCoVision(registry, hw, world)
     voice = Voice(engine="none", duck_name=config.name)
