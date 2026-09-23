@@ -44,6 +44,10 @@ Windows 用户：上面第 2 步不用手动做——首次运行 `tools\sim_duc
 或 `tools\live_danmaku_sim.bat` 会自动建 venv 并装齐依赖（包括弹幕桥用的
 mss/pywin32/rapidocr_onnxruntime），只需先装好 [uv](https://docs.astral.sh/uv/)。
 
+> **uv 不是必须的**：所有启动脚本（.sh/.bat）在没有 uv 时会自动回退到系统
+> Python 自带的 venv+pip（要求 Python ≥ 3.10，3.12 最稳）。uv 只是更快、
+> 并且会自动下载 Python 3.12；`winget install astral-sh.uv` 即可安装。
+
 **仓库是自包含的**：全部动作策略模型（官方 7 个 + 社区加强 2 个，~7MB）在项目根
 `policies/`（来源与 License 见 `policies/README.md`）；跑仿真必需的官方运行时代码
 （策略推理引擎 + 场景/网格，~21MB）内置在 `third_party/microduck_runtime/`

@@ -13,17 +13,33 @@ cd /d "%~dp0\.."
 set VENV=third_party\microduck_rl\.venv-sim
 set VENVPY=%VENV%\Scripts\python.exe
 
+rem 依赖安装器：优先 uv（快、会自动装 Python 3.12）；
+rem 没有 uv 就回退系统 Python 自带的 venv+pip（要求 3.10+，3.12 最稳）
+set HAVE_UV=0
+where uv >nul 2>nul && set HAVE_UV=1
+
 if not exist "%VENVPY%" (
     echo 模拟器环境还没装，正在安装（仅需一次）……
-    where uv >nul 2>nul || (echo 需要先安装 uv: https://docs.astral.sh/uv/ & exit /b 1)
-    uv venv %VENV% --python 3.12 || exit /b 1
-    uv pip install --python %VENVPY% mujoco onnxruntime numpy better-actuator-models glfw pyopengl || exit /b 1
+    if "!HAVE_UV!"=="1" (
+        uv venv %VENV% --python 3.12 || exit /b 1
+        uv pip install --python %VENVPY% mujoco onnxruntime numpy better-actuator-models glfw pyopengl || exit /b 1
+    ) else (
+        echo [提示] 没找到 uv，回退到系统 Python（winget install astral-sh.uv 可装 uv，更快）
+        call :find_python || exit /b 1
+        !PY! -m venv %VENV% || exit /b 1
+        "%VENVPY%" -m pip install --upgrade pip || exit /b 1
+        "%VENVPY%" -m pip install mujoco onnxruntime numpy better-actuator-models glfw pyopengl || exit /b 1
+    )
 )
 
 "%VENVPY%" -c "import mss, win32gui, rapidocr_onnxruntime" >nul 2>nul
 if errorlevel 1 (
     echo [启动] 安装弹幕桥依赖（mss/pywin32/rapidocr_onnxruntime）…
-    uv pip install --python %VENVPY% mss pywin32 rapidocr_onnxruntime || exit /b 1
+    if "!HAVE_UV!"=="1" (
+        uv pip install --python %VENVPY% mss pywin32 rapidocr_onnxruntime || exit /b 1
+    ) else (
+        "%VENVPY%" -m pip install mss pywin32 rapidocr_onnxruntime || exit /b 1
+    )
 )
 
 tasklist /fi "imagename eq webcastmate.exe" 2>nul | find /i "webcastmate" >nul
@@ -55,3 +71,17 @@ goto argloop
 
 echo [启动] 3D 仿真 + 弹幕桥线程
 "%VENVPY%" tools\sim_duckpet_3d.py !ARGS!
+exit /b %errorlevel%
+
+rem ---- 找一个 ^>=3.10 的系统 Python：先 py 启动器，再 PATH 里的 python ----
+:find_python
+set PY=
+where py >nul 2>nul && (py -3.12 -c "pass" >nul 2>nul && set PY=py -3.12)
+if not defined PY where py >nul 2>nul && (py -3 -c "import sys; sys.exit(sys.version_info < (3,10))" >nul 2>nul && set PY=py -3)
+if not defined PY (python -c "import sys; sys.exit(sys.version_info < (3,10))" >nul 2>nul && set PY=python)
+if not defined PY (
+    echo [错误] 没找到 ^>=3.10 的 Python。请装 uv（https://docs.astral.sh/uv/）或 Python 3.12（https://www.python.org/downloads/）
+    exit /b 1
+)
+echo [提示] 使用 !PY!
+exit /b 0

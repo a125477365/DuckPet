@@ -7,15 +7,10 @@
 #   bash tools/sim_duckpet_3d.sh            # 3D 窗口 + 终端文字指令
 #   bash tools/sim_duckpet_3d.sh --headless # 无窗口自动验证（CI 友好）
 cd "$(dirname "$0")/.." || exit 1
+source tools/_venv.sh
 
-VENV=third_party/microduck_rl/.venv-sim
-if [ ! -d "$VENV" ]; then
-    echo "模拟器环境还没装，正在安装（仅需一次）……"
-    UV=$(command -v uv || echo ~/.local/bin/uv)
-    "$UV" venv "$VENV" --python 3.12
-    "$UV" pip install --python "$VENV" \
-        mujoco onnxruntime numpy better-actuator-models glfw
-fi
+VENV=$SIM_VENV
+ensure_sim_venv || exit 1
 
 if [ "${1:-}" = "--headless" ]; then
     exec "$VENV/bin/python" tools/sim_duckpet_3d.py "$@"

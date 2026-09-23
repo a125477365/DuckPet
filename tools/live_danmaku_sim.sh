@@ -10,12 +10,14 @@
 # Windows 用 tools/live_danmaku_sim.bat。
 set -u
 cd "$(dirname "$0")/.."
-PY=third_party/microduck_rl/.venv-sim/bin/python
+source tools/_venv.sh
+ensure_sim_venv || exit 1   # 先保证 venv 在，下面才装得进 OCR 依赖
+PY=$SIM_VENV/bin/python
 
 if ! "$PY" -c "import Vision, Quartz" 2>/dev/null; then
   echo "[启动] 安装 OCR 依赖（pyobjc Vision/Quartz）…"
-  (cd third_party/microduck_rl && uv pip install --python .venv-sim/bin/python \
-    pyobjc-framework-Vision pyobjc-framework-Quartz pyobjc-framework-Cocoa) || exit 1
+  venv_pip "$SIM_VENV" pyobjc-framework-Vision pyobjc-framework-Quartz \
+    pyobjc-framework-Cocoa || exit 1
 fi
 
 if ! pgrep -f "Douyin Webcast Mate" >/dev/null && ! pgrep -f "直播伴侣" >/dev/null; then

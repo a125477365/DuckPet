@@ -7,6 +7,7 @@
 #   G            喙叼地上物体       Y      坐下/站起        R  前滚翻
 #   B            身体姿态模式       H      头部控制模式      Q  退出
 cd "$(dirname "$0")/.." || exit 1
+source tools/_venv.sh
 
 # 运行时在完整子模块里优先（跟随上游），子模块没初始化用仓库内置副本
 if [ -f third_party/microduck_rl/scripts/infer_policy.py ]; then
@@ -15,14 +16,8 @@ else
     RT=third_party/microduck_runtime
 fi
 
-VENV=third_party/microduck_rl/.venv-sim
-if [ ! -d "$VENV" ]; then
-    echo "模拟器环境还没装，正在安装（仅需一次）……"
-    UV=$(command -v uv || echo ~/.local/bin/uv)
-    "$UV" venv "$VENV" --python 3.12
-    "$UV" pip install --python "$VENV" \
-        mujoco onnxruntime numpy better-actuator-models glfw
-fi
+VENV=$SIM_VENV
+ensure_sim_venv || exit 1
 
 # macOS 上 MuJoCo viewer 需要 mjpython（主线程留给 Cocoa）。
 # 标准 mjpython 入口依赖 otool（Xcode 命令行工具），这里直接手动设置
