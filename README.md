@@ -27,13 +27,12 @@ python3 -m duckpet.sim            # 交互模式，输入 help 查看指令
 ## 获取代码与仿真依赖
 
 ```bash
-# 1. 克隆（microduck_rl 是 submodule：官方物理仿真 + 训练栈，跟随上游升级）
-git clone --recurse-submodules https://github.com/a125477365/DuckPet
+# 1. 克隆（普通克隆即可跑全部仿真，无需子模块）
+git clone https://github.com/a125477365/DuckPet
 cd DuckPet
-# 已经 clone 了的话：git submodule update --init
 
 # 2. 仿真运行环境（仅 3D 物理仿真需要；大脑逻辑仿真零依赖）
-cd third_party/microduck_rl
+mkdir -p third_party/microduck_rl && cd third_party/microduck_rl
 uv venv .venv-sim --python 3.12
 uv pip install --python .venv-sim/bin/python \
   mujoco glfw numpy onnxruntime pyopengl better-actuator-models
@@ -45,14 +44,23 @@ Windows 用户：上面第 2 步不用手动做——首次运行 `tools\sim_duc
 或 `tools\live_danmaku_sim.bat` 会自动建 venv 并装齐依赖（包括弹幕桥用的
 mss/pywin32/rapidocr_onnxruntime），只需先装好 [uv](https://docs.astral.sh/uv/)。
 
-**全部动作策略模型（官方 7 个 + 社区加强 2 个，共 ~7MB）已随仓库自带在
-`policies/` 目录**（走路/站立/坐卧/喙叼/左右踢球/前滚翻×2/粗糙地形行走，
-来源与 License 见 `policies/README.md`），clone 即完整，无需再下载。
+**仓库是自包含的**：全部动作策略模型（官方 7 个 + 社区加强 2 个，~7MB）在项目根
+`policies/`（来源与 License 见 `policies/README.md`）；跑仿真必需的官方运行时代码
+（策略推理引擎 + 场景/网格，~21MB）内置在 `third_party/microduck_runtime/`
+（Apache-2.0 裁剪自上游，含出处说明）。clone 主仓库即可跑，不依赖任何额外下载。
+
+`third_party/microduck_rl` 子模块（pollen-robotics/microduck_rl）只在**自己训练
+新动作策略**时才需要，初始化后仿真会自动优先用它的最新代码：
+
+```bash
+git submodule update --init --depth 1 third_party/microduck_rl   # 浅克隆，省流量
+```
 
 升级官方仿真/策略到最新版：
 
 ```bash
 git submodule update --remote third_party/microduck_rl   # 拉上游最新仿真/训练代码
+bash tools/sync_microduck_runtime.sh                     # 把运行时闭包同步进内置副本
 # 策略有新版时重下覆盖 policies/ 即可即插即用：
 huggingface-cli download pollen-robotics/microduck-policies --include "*.onnx" \
   --local-dir policies/

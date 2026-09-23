@@ -20,8 +20,12 @@ from ..perception.base import Detection
 from .base import DuckHardware
 
 _ROOT = Path(__file__).resolve().parent.parent.parent
-_REPO = _ROOT / "third_party" / "microduck_rl"
-_SCENE = _REPO / "src" / "mjlab_microduck" / "robot" / "microduck" / "scene_ball.xml"
+_SUBMODULE = _ROOT / "third_party" / "microduck_rl"
+_VENDORED = _ROOT / "third_party" / "microduck_runtime"
+# 优先用完整子模块（训练/开发，跟随上游最新）；子模块没初始化时回退到
+# 仓库内置的运行时副本（Apache-2.0 vendored，含跑仿真的全部必需文件），
+# 保证 clone 主仓库即可跑仿真
+_REPO = _SUBMODULE if (_SUBMODULE / "scripts" / "infer_policy.py").exists() else _VENDORED
 # 策略文件随 DuckPet 仓库自带（项目根 policies/，来源与 License 见其 README.md），
 # clone 即可跑，不用再单独下载
 _POLICIES = _ROOT / "policies"

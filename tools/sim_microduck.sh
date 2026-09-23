@@ -6,13 +6,21 @@
 #   方向键/WASD  行走与转向        K / L   左脚/右脚踢球（自动加载带球场景）
 #   G            喙叼地上物体       Y      坐下/站起        R  前滚翻
 #   B            身体姿态模式       H      头部控制模式      Q  退出
-cd "$(dirname "$0")/../third_party/microduck_rl" || exit 1
+cd "$(dirname "$0")/.." || exit 1
 
-VENV=.venv-sim
+# 运行时在完整子模块里优先（跟随上游），子模块没初始化用仓库内置副本
+if [ -f third_party/microduck_rl/scripts/infer_policy.py ]; then
+    RT=third_party/microduck_rl
+else
+    RT=third_party/microduck_runtime
+fi
+
+VENV=third_party/microduck_rl/.venv-sim
 if [ ! -d "$VENV" ]; then
     echo "模拟器环境还没装，正在安装（仅需一次）……"
-    ~/.local/bin/uv venv $VENV --python 3.12
-    ~/.local/bin/uv pip install --python $VENV \
+    UV=$(command -v uv || echo ~/.local/bin/uv)
+    "$UV" venv "$VENV" --python 3.12
+    "$UV" pip install --python "$VENV" \
         mujoco onnxruntime numpy better-actuator-models glfw
 fi
 
@@ -38,12 +46,15 @@ export PYTHONPATH="$SITE"
 # mjpython 二进制的 argv 约定（见 mujoco 自带 mjpython.py 第 94-96 行）：
 # argv[0]=python 解释器路径，argv[1]=用户脚本。用 exec -a 把 argv[0]
 # 设成 venv 的 python，否则它会把 argv[1] 的 python 二进制当脚本解析。
+# 策略文件在项目根 policies/（随仓库自带），场景相对路径要求 cwd=运行时根
+cd "$RT" || exit 1
+P=../../policies
 exec -a "$VENVPY" "$MJPYAPP" scripts/infer_policy.py \
-    --walking policies/alpha_walking.onnx \
-    --standing policies/alpha_stand.onnx \
-    --sitstand policies/alpha_sitstand.onnx \
-    --ground-pick policies/alpha_ground_pick.onnx \
-    --kick-left policies/ball_kick_left.onnx \
-    --kick-right policies/ball_kick_right.onnx \
-    --roulade policies/roulade.onnx \
+    --walking $P/alpha_walking.onnx \
+    --standing $P/alpha_stand.onnx \
+    --sitstand $P/alpha_sitstand.onnx \
+    --ground-pick $P/alpha_ground_pick.onnx \
+    --kick-left $P/ball_kick_left.onnx \
+    --kick-right $P/ball_kick_right.onnx \
+    --roulade $P/roulade.onnx \
     --new-cmd-obs

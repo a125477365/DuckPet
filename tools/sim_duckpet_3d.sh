@@ -11,8 +11,9 @@ cd "$(dirname "$0")/.." || exit 1
 VENV=third_party/microduck_rl/.venv-sim
 if [ ! -d "$VENV" ]; then
     echo "模拟器环境还没装，正在安装（仅需一次）……"
-    ~/.local/bin/uv venv "$VENV" --python 3.12
-    ~/.local/bin/uv pip install --python "$VENV" \
+    UV=$(command -v uv || echo ~/.local/bin/uv)
+    "$UV" venv "$VENV" --python 3.12
+    "$UV" pip install --python "$VENV" \
         mujoco onnxruntime numpy better-actuator-models glfw
 fi
 
