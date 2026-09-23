@@ -60,6 +60,21 @@ class MuJoCoDuck(DuckHardware):
         import mujoco  # noqa: PLC0415
         import numpy as np  # noqa: PLC0415
 
+        # 加载 infer_policy.py：优先用完整子模块（跟随上游最新）；
+        # 但真正决定用哪棵树的是 scene_ball.xml 是否存在——
+        # 那是物理仿真的硬依赖，子模块没初始化/被裁剪成坏副本时
+        # 就回退到仓库内置运行时（已做跨平台兼容补丁）
+        scene_xml = Path(repo) / "src" / "mjlab_microduck" / "robot" / "microduck" / "scene_ball.xml"
+        if not scene_xml.exists():
+            vendored = _VENDORED
+            if (vendored / "src" / "mjlab_microduck" / "robot" / "microduck" / "scene_ball.xml").exists():
+                print(f"[仿真] {repo} 缺 scene_ball.xml，回退内置运行时 {vendored}")
+                repo = vendored
+            else:
+                raise RuntimeError(
+                    f"找不到 scene_ball.xml：{repo} 和 {vendored} 都没有。"
+                    f"请初始化子模块：git submodule update --init --depth 1 third_party/microduck_rl")
+
         spec = importlib.util.spec_from_file_location(
             "infer_policy", Path(repo) / "scripts" / "infer_policy.py")
         mod = importlib.util.module_from_spec(spec)

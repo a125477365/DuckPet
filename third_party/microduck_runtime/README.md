@@ -4,11 +4,14 @@
 （Apache-2.0，LICENSE 已附上）**裁剪复制**的运行必需文件，让 DuckPet 在
 `third_party/microduck_rl` 子模块没初始化（比如网络原因克隆超时）时也能直接跑 3D 仿真。
 
-- 上游版本：`develop` 分支 `cb70b79`（2026-09-22 裁剪）
+- 上游版本：`develop` 分支 `cb70b79`（2026-09-23 裁剪）
 - 包含：`scripts/infer_policy.py`（策略推理引擎 PolicyInference）、
   `src/mjlab_microduck/robot/microduck/` 下的 `scene_ball.xml` 场景闭包
   （scene_ball.xml + robot_groundcontact.xml + ball.xml + 38 个 STL 网格）
 - 不含：训练栈（mjlab/torch/warp）、其他场景、测试——这些需要完整子模块
+- **本地补丁**（`sync_microduck_runtime.sh` 重新裁剪后会自动重打）：
+  `infer_policy.py` 的 `termios`/`tty`（Unix 专属）加了导入 guard，
+  Windows 上 KeyboardReader 键盘遥控自动禁用，PolicyInference 不受影响
 
 ## 加载优先级
 

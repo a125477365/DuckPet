@@ -10,10 +10,18 @@ import pickle
 import queue
 import select
 import sys
-import termios
 import threading
 import time
-import tty
+# [DuckPet 补丁] termios/tty 是 Unix 专用；Windows 导入即崩。
+# 仅 KeyboardReader（键盘遥控）用到，置 None 后该类自动禁用，
+# PolicyInference 等核心功能不受影响。此补丁由 tools/sync_microduck_runtime.sh
+# 在每次从上游重新裁剪后自动重打（幂等）。
+try:
+    import termios
+    import tty
+except ImportError:  # Windows
+    termios = None
+    tty = None
 import numpy as np
 import mujoco
 import mujoco.viewer
@@ -156,7 +164,8 @@ class TerminalInput:
 
     def __init__(self):
         self._queue = queue.Queue()
-        self.enabled = sys.stdin.isatty()
+        # [DuckPet 补丁] termios 为 None 的平台（Windows）禁用键盘遥控
+        self.enabled = sys.stdin.isatty() and termios is not None
         self._fd = sys.stdin.fileno() if self.enabled else -1
         self._old_attrs = None
         self._stop = threading.Event()
