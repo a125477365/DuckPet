@@ -6,6 +6,9 @@ rem   tools\sim_duckpet_3d.bat            # 3D 窗口 + 终端文字指令
 rem   tools\sim_duckpet_3d.bat --headless # 无窗口自动验证
 rem   tools\sim_duckpet_3d.bat --danmaku  # 同时嵌入直播伴侣弹幕监听线程
 setlocal enabledelayedexpansion
+rem 中文 cmd 默认 GBK：弹幕 emoji 会崩 print，统一切 UTF-8
+chcp 65001 >nul
+set PYTHONIOENCODING=utf-8
 cd /d "%~dp0\.."
 
 set VENV=third_party\microduck_rl\.venv-sim

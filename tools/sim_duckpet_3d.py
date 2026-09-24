@@ -37,6 +37,15 @@ if _libpython and "mjpython" in os.path.basename(sys.executable):
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+# Windows 中文 cmd 默认 GBK 码页：弹幕里的 emoji / 生僻字会让 print 抛
+# UnicodeEncodeError 直接崩掉主循环（表现为"收到指令但鸭子不动、无报错"）。
+# 统一按 UTF-8 输出、无法编码的字符替换而不是崩溃。
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 from duckpet.action.voice import Voice
 from duckpet.config import DuckConfig
 from duckpet.core.brain import Brain

@@ -440,6 +440,12 @@ def run_monitor(on_comment, *, app_key: str = "", region=DEFAULT_REGION,
 # ---------------------------------------------------------------- CLI
 
 def main() -> None:
+    # Windows 中文 cmd 默认 GBK：弹幕 emoji 会崩 print，统一 UTF-8
+    for s in (sys.stdout, sys.stderr):
+        try:
+            s.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
     ap = argparse.ArgumentParser(description="直播伴侣评论区 → DuckPet 指令桥")
     ap.add_argument("--app", default="", help="窗口名匹配关键词（默认自动匹配直播伴侣）")
     ap.add_argument("--region", default=",".join(str(v) for v in DEFAULT_REGION),

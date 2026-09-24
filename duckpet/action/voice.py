@@ -25,7 +25,7 @@ class Voice:
             return
         if self.engine == "edge_tts" and self._edge_say(text):
             return
-        print(f"[{self.duck_name} 说] {text}")
+        print(f"[{self.duck_name} 说] {text}", flush=True)
 
     def _piper_say(self, text: str) -> bool:
         try:
@@ -59,7 +59,7 @@ class Voice:
         if wav.exists():
             self._play_file(wav)
         else:
-            print(f"[{self.duck_name} 叫声:{kind}]")
+            print(f"[{self.duck_name} 叫声:{kind}]", flush=True)
 
     def quack(self) -> None: self.sound("quack")
     def ack(self) -> None: self.sound("ack")

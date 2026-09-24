@@ -150,14 +150,15 @@ class Sim:
         person, role, d, note = self._resolve_speaker(name, direction)
         self.directions[name] = d
         extra = f"，{note}" if note else ""
-        print(f"\n>>> 【{name}】（{role.label}）在 {d:.0f}° 方向喊：{self.duck.config.name}！{extra}")
+        print(f"\n>>> 【{name}】（{role.label}）在 {d:.0f}° 方向喊：{self.duck.config.name}！{extra}",
+              flush=True)
         self.brain.post(CallEvent(role=role, direction_deg=d, person=person))
         run_ticks(self.brain, 0.3)
 
     def cmd_say(self, name: str, text: str):
         person, role, d, note = self._resolve_speaker(name, None)
         extra = f"，{note}" if note else ""
-        print(f"\n>>> 【{name}】（{role.label}）说：{text}{extra}")
+        print(f"\n>>> 【{name}】（{role.label}）说：{text}{extra}", flush=True)
         self.brain.post(SpeechEvent(text=text, role=role, direction_deg=d, person=person))
         run_ticks(self.brain, 0.3)
 
@@ -395,6 +396,14 @@ def repl(brain: Brain | None = None) -> None:
 
 
 def main() -> None:
+    # Windows 中文 cmd 默认 GBK：弹幕/评论里的 emoji 会让 print 抛
+    # UnicodeEncodeError 崩掉主循环。统一 UTF-8 + 无法编码则替换。
+    import sys
+    for s in (sys.stdout, sys.stderr):
+        try:
+            s.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
     ap = argparse.ArgumentParser()
     ap.add_argument("--demo", action="store_true", help="跑预置演示场景")
     args = ap.parse_args()

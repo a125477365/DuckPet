@@ -9,6 +9,9 @@ rem 弹幕桥是仿真内线程（--danmaku）：评论区弹幕和终端键盘�
 rem 注意：Windows 截图按屏幕区域抓取，直播伴侣窗口请勿最小化/遮挡。
 rem 退出：Ctrl+C。
 setlocal enabledelayedexpansion
+rem 中文 cmd 默认 GBK：弹幕 emoji 会崩 print，统一切 UTF-8
+chcp 65001 >nul
+set PYTHONIOENCODING=utf-8
 cd /d "%~dp0\.."
 set VENV=third_party\microduck_rl\.venv-sim
 set VENVPY=%VENV%\Scripts\python.exe

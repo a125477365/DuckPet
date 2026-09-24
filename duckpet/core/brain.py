@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import sys
 import time
 from collections import deque
 from dataclasses import dataclass, field
@@ -57,6 +58,10 @@ class Brain:
         self.behavior: Behavior = WanderBehavior(duck)
         self.behavior.enter()
 
+    def _log(self, msg: str) -> None:
+        """打印到 stdout 并立即刷新，确保 Windows 命令窗也能实时看到。"""
+        print(msg, flush=True)
+
     # ---------- 事件入口 ----------
     def post(self, event) -> None:
         self.inbox.append(event)
@@ -98,60 +103,73 @@ class Brain:
         if ev.kind == "cliff":
             hw = self.duck.hw
             hw.stop()
-            print(f"[{self.duck.config.name}] 前面是悬崖！后退转向")
+            self._log(f"[{self.duck.config.name}] 前面是悬崖！后退转向")
             hw.walk(-0.05)
             time.sleep(0.4)
             hw.stop()
             hw.turn_body(150)
         elif ev.kind == "obstacle":
             self.duck.hw.stop()
-            print(f"[{self.duck.config.name}] 前面有障碍，绕开")
+            self._log(f"[{self.duck.config.name}] 前面有障碍，绕开")
             self.duck.hw.turn_body(float(ev.data.get("avoid_deg", 60)))
 
     def _handle_call(self, call: CallEvent) -> None:
         name = self.duck.config.name
         who = call.person.name if call.person else "陌生人"
         decision = self.arbiter.decide_call(call, self._ctx())
+        self._log(f"[{name}] 呼叫仲裁：{who}（{call.role.label}）方向 {call.direction_deg:.0f}° "
+                  f"→ 决策={decision.name}")
         if decision is Decision.ACK_ONLY:
-            print(f"[{name}] 听到{who}（{call.role.label}）叫我，但手头有更重要的事，先转头应一声")
+            self._log(f"[{name}] 听到{who}叫我，但手头有更重要的事，先转头应一声")
             self.duck.hw.turn_head(call.direction_deg)
             self.duck.voice.ack()
             return
         if decision is Decision.FOLLOW_SWITCH and isinstance(self.behavior, FollowBehavior):
+            self._log(f"[{name}] 跟随中更高级别呼叫，切换目标到 {who}")
             self.behavior.switch_target(call.person, call.role)
             return
         if decision is Decision.PREEMPT:
-            print(f"[{name}] {who}（{call.role.label}）级别更高，放下手头的事！")
+            self._log(f"[{name}] {who}（{call.role.label}）级别更高，放下手头的事！")
             self.behavior.exit()
         self._start(SeekCallerBehavior(self.duck, call))
 
     def _handle_speech(self, ev: SpeechEvent) -> None:
         name = self.duck.config.name
         cmd = self.parser.parse(ev.text, ev.role)
+        self._log(f"[{name}] 解析「{ev.text}」→ 意图={cmd.intent.name}"
+                  f"{' 目标=' + cmd.target if cmd.target else ''}"
+                  f"{' 人称=' + cmd.person_name if cmd.person_name else ''}")
         if cmd.intent is Intent.UNKNOWN:
             if "你叫什么名字" in ev.text:
                 self.duck.voice.say(f"我叫{name}！")
             else:
-                print(f"[{name}] 没听懂「{ev.text}」")
+                self._log(f"[{name}] 没听懂「{ev.text}」，当前词库未覆盖")
                 self.duck.voice.quack()
             return
 
         # 正在等某人的指令时，同级别及以上的人开口 = 就是我们等的那句指令
         if (isinstance(self.behavior, SeekCallerBehavior)
                 and ev.role >= self.behavior.role):
+            self._log(f"[{name}] 等待的指令来了，直接执行")
             self.behavior.exit()
             self.behavior = WanderBehavior(self.duck)
             self._execute(cmd, ev.role, ev.person, ev.direction_deg)
             return
 
         decision = self.arbiter.decide_command(cmd, ev.role, self._ctx())
+        self._log(f"[{name}] 指令仲裁：{cmd.intent.name}，{ev.role.label}"
+                  f" → 决策={decision.name}")
         if decision is Decision.REJECT:
+            reason = ("跟随只限主人和家人" if cmd.intent is Intent.FOLLOW
+                      else "该指令需要主人或家人权限")
+            self._log(f"[{name}] 拒绝执行：{reason}")
             if cmd.intent is Intent.FOLLOW:
                 self.duck.voice.say("对不起，我只跟主人和家人走哦")
             else:
                 self.duck.voice.say("这个要主人家人才可以哦")
             return
         if decision is Decision.ACK_ONLY:
+            self._log(f"[{name}] 当前任务更优先，只能转头礼貌回应")
             self.duck.hw.turn_head(ev.direction_deg)
             self.duck.voice.ack()
             return
@@ -159,13 +177,14 @@ class Brain:
             self.queue.append(QueuedCommand(cmd=cmd, role=ev.role,
                                             person=ev.person, direction_deg=ev.direction_deg))
             who = ev.person.name if ev.person else None
+            self._log(f"[{name}] 指令已排队，当前任务完成后执行")
             self.duck.voice.say(f"好的{who}，我忙完手头的事就来" if who
                                 else "好的，我忙完手头的事就来")
             return
 
         # EXECUTE：若抢占了更低级别的任务，先把它停掉
         if not isinstance(self.behavior, WanderBehavior) and ev.role > self.behavior.role:
-            print(f"[{name}] 执行更高级别的指令，放下当前任务")
+            self._log(f"[{name}] 执行更高级别的指令，放下当前任务")
             self.behavior.exit()
             self.behavior = WanderBehavior(self.duck)
         self._execute(cmd, ev.role, ev.person, ev.direction_deg)
@@ -175,7 +194,7 @@ class Brain:
         duck = self.duck
         name = duck.config.name
         if cmd.intent is Intent.STOP:
-            print(f"[{name}] 收到停止指令")
+            self._log(f"[{name}] 收到停止指令")
             self.behavior.exit()
             self.behavior = WanderBehavior(duck)
             return
@@ -186,19 +205,20 @@ class Brain:
             if self.on_name_changed:
                 self.on_name_changed(cmd.person_name)
             duck.voice.say(f"好耶，我以后叫{cmd.person_name}啦！")
-            print(f"[系统] 鸭子改名：{old} -> {cmd.person_name}（唤醒词已热更新）")
+            self._log(f"[系统] 鸭子改名：{old} -> {cmd.person_name}（唤醒词已热更新）")
             return
         if cmd.intent is Intent.ADD_RELATION:
             self._add_relation(cmd, person)
             return
         if cmd.intent is Intent.STAND_UP:
             if isinstance(self.behavior, SitBehavior) and duck.hw.stand_up():
-                print(f"[{name}] 站起来啦！")
+                self._log(f"[{name}] 站起来啦！")
                 duck.voice.happy()
                 self.behavior.exit()
                 self.behavior = WanderBehavior(duck)
             else:
-                duck.voice.quack()   # 本来就站着
+                self._log(f"[{name}] 本来就站着呢")
+                duck.voice.quack()
             return
 
         behavior: Behavior
@@ -219,8 +239,11 @@ class Brain:
         elif cmd.intent is Intent.SIT:
             behavior = SitBehavior(duck, person, role)
         else:
+            self._log(f"[{name}] 意图 {cmd.intent.name} 缺少执行条件"
+                      f"（如跟随但认不出是谁/前滚翻缺目标），没执行")
             duck.voice.quack()
             return
+        self._log(f"[{name}] 开始执行：{behavior.name}")
         self.behavior.exit()
         self._start(behavior)
 
@@ -242,7 +265,7 @@ class Brain:
         person = duck.registry.add(person_name, role)
         duck.personality.reward("praised")
         duck.voice.say(f"记住你啦，{person_name}，你是我的{role.label}！")
-        print(f"[系统] 登记：{person_name} = {role.label}（声纹/人脸样本可用 enroll 工具补录）")
+        self._log(f"[系统] 登记：{person_name} = {role.label}（声纹/人脸样本可用 enroll 工具补录）")
 
     def _handle_request(self, req: tuple) -> None:
         kind, payload = req
@@ -263,7 +286,7 @@ class Brain:
         if self.queue:
             self.queue.sort(key=lambda q: q.sort_key)
             nxt = self.queue.pop(0)
-            print(f"[{self.duck.config.name}] 轮到排队指令：{nxt.cmd.raw}")
+            self._log(f"[{self.duck.config.name}] 当前任务完成，轮到排队指令：{nxt.cmd.raw}")
             self._execute(nxt.cmd, nxt.role, nxt.person, nxt.direction_deg)
             return
         self._start(WanderBehavior(self.duck))
