@@ -80,8 +80,8 @@ huggingface-cli download pollen-robotics/microduck-policies --include "*.onnx" \
 | 4 | 呼叫 + 优先级仲裁 | `core/arbiter.py` + `core/brain.py` | DOA：pyroomacoustics / ODAS | ✅ |
 | 5 | 跟随（仅主人/家人） | `core/behaviors.py: FollowBehavior` | YOLO + BoTSORT + OSNet ReID | ✅ |
 | 6 | 空闲乱逛/避险/调皮 | `WanderBehavior` + `TeaseBehavior` + `SafetyEye` | VL53L0X 防跌 + OpenCV 光流 | ✅ |
-| 7 | 踢球 | `KickBallBehavior` | 球检测：YOLO(COCO)；踢球动作策略：microduck_rl 官方 `ball_kick_left/right`（仿真实测把球踢飞 7m+） | ✅ |
-| 8 | 叼/搬东西 | `CarryBehavior` | 开放词汇检测：YOLO-World；喙叼策略：microduck_rl 官方 `alpha_ground_pick` | ✅ |
+| 7 | 踢球 | `KickBallBehavior` | 球检测：YOLO(COCO)；踢球动作策略：microduck_rl 官方 `ball_kick_left/right`（仿真实测把球踢飞 7m+）；找不到/追不上最多找 `search_timeout_s`（默认 30 秒），然后**急得原地打转或一屁股坐下**再放弃 | ✅ |
+| 8 | 叼/搬东西 | `CarryBehavior` | 开放词汇检测：YOLO-World；喙叼策略：microduck_rl 官方 `alpha_ground_pick`；找不到目标/目的地同样 30 秒急哭收场 | ✅ |
 | 9 | 调皮忠诚治愈性格 | `core/personality.py`（拓麻歌子式情绪引擎） | 自建（参考 Reachy Mini / 小智表情设计） | ✅ |
 | 10 | 跳舞（直播彩蛋，任何人可点） | `core/behaviors.py: DanceBehavior` | 自建摇摆舞动作编排（满量程扭身+前后蹦+甩头+转圈谢幕） | ✅ |
 | 11 | 前滚翻 | `core/behaviors.py: TrickBehavior` | 社区 `langli11/microduck-tricks` 的 roulade_elan（Apache-2.0，比官方版成功率高） | ✅ |

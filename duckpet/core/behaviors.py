@@ -36,6 +36,49 @@ class Behavior:
     def exit(self) -> None:
         self.duck.hw.stop()
 
+    # ---------- 找不到目标的统一收场（急哭） ----------
+    # 所有"找东西"类行为共用：打印原因 -> 急得原地快速打转甩头
+    # （或一屁股坐下再委屈地站起来）-> 结束指令，不再继续找。
+
+    def _start_giveup(self, reason: str) -> None:
+        print(f"[{self.duck.config.name}] {reason}（急得快哭了）", flush=True)
+        self.duck.voice.helpless()
+        self._in_giveup = True
+        self._giveup_t0 = time.time()
+        self._giveup_stood = False
+        # 随机二选一：急得团团转 / 一屁股坐下再站起来（坐不下就打转）
+        self._giveup_style = "spin"
+        if random.random() < 0.4 and self.duck.hw.sit():
+            self._giveup_style = "sit"
+
+    def _tick_giveup(self) -> bool:
+        """每个 update 开头调用；返回 True 表示正在急哭收场（本拍已被占用）。"""
+        if not getattr(self, "_in_giveup", False):
+            return False
+        hw = self.duck.hw
+        el = time.time() - self._giveup_t0
+        if self._giveup_style == "sit":
+            if el < 2.5:
+                hw.stop()                                  # 一屁股坐下（委屈）
+            elif el < 5.6:
+                if not self._giveup_stood:                 # 收膝起身，慢就慢点
+                    self._giveup_stood = True              #（sitstand 策略 ~3s 站完）
+                    hw.stand_up()
+                hw.stop()
+            else:
+                self._in_giveup = False
+                self.done = True
+            return True
+        if el < 2.4:                                       # 原地快速打转 + 甩头
+            hw.walk(0.0, 0.0, 1.2)
+            hw.turn_head(45 if int(el / 0.3) % 2 == 0 else -45, -10)
+        else:
+            hw.stop()
+            hw.turn_head(0, 0)
+            self._in_giveup = False
+            self.done = True
+        return True
+
 
 class WanderBehavior(Behavior):
     """空闲：随意乱走乱看乱叫，心情好就去逗主人/家人。不跑远（活动半径内）。
@@ -174,19 +217,28 @@ class FollowBehavior(Behavior):
         print(f"[{self.duck.config.name}] 改去跟随{self.target.name}（{role.label}）")
 
     def enter(self) -> None:
-        print(f"[{self.duck.config.name}] 开始跟随 {self.target.name}")
+        print(f"[{self.duck.config.name}] 开始跟随 {self.target.name}", flush=True)
         self.duck.hw.turn_head(0, 0)   # 头回正，盯着要跟随的人
         self.duck.voice.happy()
+        self._lost_since: float | None = None
 
     def update(self, dt: float) -> None:
+        if self._tick_giveup():
+            return
         bearing = None
         dist = None
         if self.duck.vision is not None:
             bearing = self.duck.vision.person_bearing(self.target)
             dist = self.duck.vision.person_distance(self.target)
         if bearing is None:
+            if self._lost_since is None:
+                self._lost_since = time.time()
+            if time.time() - self._lost_since > self.duck.config.search_timeout_s:
+                self._start_giveup(f"跟丢了，找不到{self.target.name}了")
+                return
             self.duck.hw.walk(0.0, 0.0, 0.6)   # 目标丢了，转圈找
             return
+        self._lost_since = None
         if dist is not None and dist < 0.55:
             self.duck.hw.walk(0.0)             # 够近了，别踩到脚
             return
@@ -201,7 +253,9 @@ class KickBallBehavior(Behavior):
 
     停止条件必须严格（对准 ±8°、距离 ≤0.16m）：官方踢球策略触发瞬间会把球
     瞬移到脚前训练位（脚前 9cm），停得太远就会看到"球直接变到脚下"。
-    鸭子走近时可能把球碰跑——没关系，视野会更新球位，继续追，超时再放弃。
+    鸭子走近时可能把球碰跑——没关系，视野会更新球位，继续追。
+    找不到/追不上有上限：整个找球过程最多 search_timeout_s（默认 30 秒），
+    超时急哭收场，不要一直找下去。
     """
 
     name = "kick_ball"
@@ -209,35 +263,34 @@ class KickBallBehavior(Behavior):
     _ALIGNED_DEG = 10.0      # 对准容差（站立策略会缓慢偏航漂移，收太紧永远对不准）
     _KICK_DIST = 0.20        # 起脚距离：再近脚就会碰到球（球被碰跑就得重追）
     _BACKOFF_DIST = 0.24     # 比这个近就不许转身（划弧会扫到球），先后退
-    _APPROACH_TIMEOUT = 25.0   # 球在背后时对准就要 ~7s，留足余量
 
     def __init__(self, duck: Duck, issuer: Person | None, role: Role):
         super().__init__(duck, issuer, role)
         self._t0 = time.time()
         self._phase = "search"
-        self._approach_since: float | None = None
         self._f_brg: float | None = None    # 方位/距离 EMA：步态让身体每步
         self._f_dist: float | None = None   # 晃 ±10°，瞬时采样会导致决策抖动
 
     def enter(self) -> None:
-        print(f"[{self.duck.config.name}] 收到！去找球……")
+        print(f"[{self.duck.config.name}] 收到！去找球……", flush=True)
 
     def update(self, dt: float) -> None:
         hw = self.duck.hw
+        if self._tick_giveup():
+            return
         det = self.duck.vision.find_object("sports ball") if self.duck.vision else None
         if self._phase == "search":
             if det is None:
-                hw.walk(0.0, 0.0, 0.4)
-                if time.time() - self._t0 > 6:
-                    self._give_up("找不到球，嘎嘎……")
+                hw.walk(0.0, 0.0, 0.6)          # 原地转圈四处张望找球
+                if time.time() - self._t0 > self.duck.config.search_timeout_s:
+                    self._start_giveup("找不到球，嘎嘎……")
                 return
             self._phase = "approach"
+            self._t0 = time.time()              # 看见球起重新计时：追球也给 30 秒
         if self._phase != "approach" or det is None:
             return
-        if self._approach_since is None:
-            self._approach_since = time.time()
-        if time.time() - self._approach_since > self._APPROACH_TIMEOUT:
-            self._give_up("追不上球，它老滚……")
+        if time.time() - self._t0 > self.duck.config.search_timeout_s:
+            self._start_giveup("追不上球，它老滚……")
             return
         dist_raw = det.distance_m if det.distance_m is not None else 9.9
         a = 0.3                              # EMA 系数（大脑 10Hz → 时间常数 ~0.3s）
@@ -270,12 +323,6 @@ class KickBallBehavior(Behavior):
             hw.walk(0.065 if dist <= 0.6 else 0.08)
             return
 
-    def _give_up(self, reason: str) -> None:
-        self.duck.hw.stop()
-        self.duck.voice.helpless()
-        print(f"[{self.duck.config.name}] {reason}")
-        self.done = True
-
 
 class CarryBehavior(Behavior):
     """叼/搬东西：找不到或太大 -> 无奈叫声；布类 -> 用喙叼起放到目的地。"""
@@ -297,20 +344,18 @@ class CarryBehavior(Behavior):
     def update(self, dt: float) -> None:
         duck = self.duck
         hw = duck.hw
+        if self._tick_giveup():
+            return
         if self._phase == "find_target":
             prompt = self._prompt(self.cmd.target, TARGET_PROMPTS) or "object"
             det = duck.vision.find_object(prompt) if duck.vision else None
             if det is None:
-                hw.walk(0.0, 0.0, 0.4)
-                if time.time() - self._t0 > 6:
-                    duck.voice.helpless()
-                    print(f"[{duck.config.name}] 找不到{self.cmd.target or '那个东西'}，无能为力……")
-                    self.done = True
+                hw.walk(0.0, 0.0, 0.6)          # 原地转圈四处找
+                if time.time() - self._t0 > duck.config.search_timeout_s:
+                    self._start_giveup(f"找不到{self.cmd.target or '那个东西'}，无能为力")
                 return
             if det.size == "large":
-                duck.voice.helpless()
-                print(f"[{duck.config.name}] {self.cmd.target}太大了，搬不动，嘎嘎……")
-                self.done = True
+                self._start_giveup(f"{self.cmd.target}太大了，搬不动")
                 return
             if self._dest_since is None:
                 self._dest_since = time.time()
@@ -320,16 +365,13 @@ class CarryBehavior(Behavior):
                 return
             is_cloth = (self.cmd.target in CLOTH_WORDS) or (det.label in CLOTH_WORDS)
             if not is_cloth:
-                duck.voice.helpless()
-                print(f"[{duck.config.name}] {self.cmd.target}不是布类，喙叼不起来……")
-                self.done = True
+                self._start_giveup(f"{self.cmd.target}不是布类，喙叼不起来")
                 return
             hw.stop()
             if not hw.beak_grab():
-                duck.voice.helpless()
-                self.done = True
+                self._start_giveup("叼不起来，嘴太短了")
                 return
-            print(f"[{duck.config.name}] 叼起{self.cmd.target or '东西'}！")
+            print(f"[{duck.config.name}] 叼起{self.cmd.target or '东西'}！", flush=True)
             self._phase = "find_dest"
             self._t0 = time.time()
             self._dest_since = None
@@ -339,12 +381,10 @@ class CarryBehavior(Behavior):
             prompt = self._prompt(self.cmd.destination, DEST_PROMPTS)
             det = duck.vision.find_object(prompt) if (prompt and duck.vision) else None
             if det is None:
-                hw.walk(0.0, 0.0, 0.4)
-                if time.time() - self._t0 > 8:
+                hw.walk(0.0, 0.0, 0.6)          # 原地转圈四处找目的地
+                if time.time() - self._t0 > duck.config.search_timeout_s:
                     hw.beak_release()
-                    print(f"[{duck.config.name}] 找不到{self.cmd.destination}，先放这了")
-                    duck.voice.quack()
-                    self.done = True
+                    self._start_giveup(f"找不到{self.cmd.destination}，先放这了")
                 return
             if self._dest_since is None:
                 self._dest_since = time.time()

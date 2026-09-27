@@ -27,6 +27,7 @@ model = "qwen2.5:1.5b"
 
 [behavior]
 command_timeout_s = 8.0        # 被呼叫后等待指令的时长，超时视为"挑逗"
+search_timeout_s = 30.0        # 找不到目标（球/物品/跟随的人）最多原地找 30 秒就急哭放弃
 tease_interval_s = 45.0        # 空闲多久后想去逗主人/家人
 voice_match_threshold = 0.5    # 声纹相似度阈值（CAM++ 官方建议 0.5）
 face_match_threshold = 0.45    # 人脸 embedding 相似度阈值

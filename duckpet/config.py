@@ -63,6 +63,7 @@ class DuckConfig:
     llm_enabled: bool = False
     llm_model: str = "qwen2.5:1.5b"
     command_timeout_s: float = 8.0
+    search_timeout_s: float = 30.0   # 找不到目标（球/物品/人）的搜索上限，超时急哭放弃
     tease_interval_s: float = 45.0
     voice_match_threshold: float = 0.5
     face_match_threshold: float = 0.45
@@ -93,7 +94,7 @@ class DuckConfig:
             cfg.llm_enabled = raw["llm"].get("enabled", cfg.llm_enabled)
             cfg.llm_model = raw["llm"].get("model", cfg.llm_model)
         if "behavior" in raw:
-            for key in ("command_timeout_s", "tease_interval_s",
+            for key in ("command_timeout_s", "tease_interval_s", "search_timeout_s",
                         "voice_match_threshold", "face_match_threshold",
                         "wander_radius_m"):
                 if key in raw["behavior"]:
